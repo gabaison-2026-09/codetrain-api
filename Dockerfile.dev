@@ -1,0 +1,21 @@
+# ローカル開発用イメージ。
+#
+# LOCAL_DEV.md §1 / §4.2:
+#   Go はローカルでも必ずコンテナで動かす。ホストの goenv は補助用途で、
+#   実際にコンパイルする Go のバージョンを決めるのは**このベースイメージ**。
+#   バージョンを上げるときは .go-version も同じ PR で更新する（§9.2）。
+#
+# ソースはバインドマウントされるため、このイメージには air だけを入れる。
+FROM golang:1.27
+
+# ホットリロード（LOCAL_DEV.md §4.2）
+RUN go install github.com/air-verse/air@v1.63.0
+
+# psql は入れない。DB を触るのは migrator（codetrain-core）の役目。
+WORKDIR /workspace/codetrain-api
+
+# AUTH_MODE=dev を使えるようにするため、開発ビルドは dev_auth タグ付きでコンパイルする。
+# 本番用の Dockerfile はこのタグを付けない（LOCAL_DEV.md §5.4）。
+ENV GOFLAGS="-buildvcs=false"
+
+CMD ["air", "-c", ".air.toml"]

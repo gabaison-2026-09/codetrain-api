@@ -1,0 +1,54 @@
+// Package middleware は Echo のミドルウェアを提供する。
+//
+// 認証は LOCAL_DEV.md §5.4 / OPEN_ISSUES D-22 の方針に従い、2モードを持つ。
+//
+//	cognito : JWKS を取得して署名・aud・iss・期限を検証する（本番と同じコードパス）
+//	dev     : 署名検証をせず X-Dev-User ヘッダを sub として扱う（ローカル専用）
+//
+// dev モードの実装は **ビルドタグ dev_auth で分離**されており、
+// タグなしのビルド（＝本番イメージ）にはコンパイルされない。
+// 「環境変数を間違えて本番で認証が無効化される」経路を、設定ミスではなく
+// コンパイル時に潰すのが目的。
+package middleware
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+
+	"github.com/gabaison-2026-09/codetrain-api/internal/config"
+)
+
+type ctxKey string
+
+// subjectKey は認証済みユーザーの sub を Echo のコンテキストに置くときのキー。
+const subjectKey ctxKey = "codetrain.subject"
+
+// ErrUnauthorized は認証に失敗したことを表す。
+var ErrUnauthorized = echo.NewHTTPError(http.StatusUnauthorized, "認証が必要です")
+
+// Subject は認証済みユーザーの sub を返す。
+func Subject(c echo.Context) (string, bool) {
+	v, ok := c.Get(string(subjectKey)).(string)
+	return v, ok && v != ""
+}
+
+func setSubject(c echo.Context, sub string) {
+	c.Set(string(subjectKey), sub)
+}
+
+// NewAuth は AUTH_MODE に応じた認証ミドルウェアを返す。
+func NewAuth(cfg config.Config) (echo.MiddlewareFunc, error) {
+	switch cfg.AuthMode {
+	case "cognito":
+		return newCognitoAuth(cfg)
+	case "dev":
+		// newDevAuth の実体はビルドタグで切り替わる。
+		//   dev_auth あり : auth_dev.go        （動作する）
+		//   dev_auth なし : auth_dev_disabled.go（起動時にエラーを返す）
+		return newDevAuth(cfg)
+	default:
+		return nil, errors.New("未知の AUTH_MODE: " + cfg.AuthMode)
+	}
+}
