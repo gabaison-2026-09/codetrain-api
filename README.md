@@ -32,6 +32,27 @@ curl -sS http://localhost:8080/v1/skills
 curl -sS -H "X-Dev-User: seed-user-01" http://localhost:8080/v1/me
 ```
 
+## レイヤ構成
+
+`handler → service → repository` の一方向の3層。依存は逆流させない。
+
+| パッケージ | 責務 | 知っていること |
+| --- | --- | --- |
+| `cmd/api` | 各層の配線（DI）とプロセスのライフサイクル | すべて |
+| `internal/server` | Echo の生成・ミドルウェア・ルーティング | Echo, handler |
+| `internal/handler` | HTTP の関心（値の取り出し・ステータス変換・JSON 化） | Echo, service |
+| `internal/service` | ユースケース。Phase 2 の出題組立・SRS はここに置く | domain のみ |
+| `internal/repository` | SQL の実行と型への詰め替え。組み立ては行わない | pgx, domain |
+
+依存する下位層の interface は **消費側（＝上位層）で最小限に定義する**。
+`service` が `SkillRepository` などを、`handler` が `SkillLister` などを宣言し、
+実体は `main.go` が注入する。テストではフェイクを差し込むので、
+service / handler は DB も Echo サーバも起動せずに検証できる。
+
+ドメイン型（`domain.Skill` / `domain.User` / `domain.Progress`）は
+`codetrain-core` のものをそのまま使う。api 側で entity を再定義して二重管理にしない
+（REPOSITORIES.md §2.1）。
+
 ## 認証（`AUTH_MODE`）
 
 | モード | 挙動 |

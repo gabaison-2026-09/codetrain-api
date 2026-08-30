@@ -2,6 +2,9 @@
 //
 // ローカルでは docker compose の api サービスとして air 経由で起動する
 // （LOCAL_DEV.md §4.2「ビルド・実行はすべてコンテナ内」）。
+//
+// このファイルの役割は各層の配線（DI）とプロセスのライフサイクル管理だけ。
+// 依存の組み立てが1箇所で読めるように、ここに集約している。
 package main
 
 import (
@@ -14,13 +17,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	echomw "github.com/labstack/echo/v4/middleware"
-
 	"github.com/gabaison-2026-09/codetrain-api/internal/config"
 	"github.com/gabaison-2026-09/codetrain-api/internal/handler"
 	"github.com/gabaison-2026-09/codetrain-api/internal/middleware"
-	"github.com/gabaison-2026-09/codetrain-api/internal/store"
+	"github.com/gabaison-2026-09/codetrain-api/internal/repository"
+	"github.com/gabaison-2026-09/codetrain-api/internal/server"
+	"github.com/gabaison-2026-09/codetrain-api/internal/service"
 )
 
 func main() {
@@ -39,47 +41,24 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	st, err := store.New(ctx, cfg.DatabaseURL)
+	repo, err := repository.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
-	defer st.Close()
+	defer repo.Close()
 
 	auth, err := middleware.NewAuth(cfg)
 	if err != nil {
 		return err
 	}
 
-	e := echo.New()
-	e.HideBanner = true
-	e.Use(echomw.Recover())
-	e.Use(echomw.RequestID())
-	e.Use(echomw.Logger())
+	h := handler.New(
+		service.NewHealth(repo),
+		service.NewSkill(repo),
+		service.NewUser(repo),
+	)
 
-	// CORS は admin（http://localhost:3000）からのアクセスのために開発時だけ緩める。
-	// 許可オリジンは環境変数で渡す（LOCAL_DEV.md §4.2）。
-	if len(cfg.CORSAllowedOrigins) > 0 {
-		allowHeaders := []string{
-			echo.HeaderOrigin, echo.HeaderContentType,
-			echo.HeaderAccept, echo.HeaderAuthorization,
-		}
-		// dev モード固有のヘッダ（X-Dev-User）はビルドタグ側から受け取る。
-		// 本番ビルドでは空になり、ヘッダ名すらバイナリに残らない。
-		allowHeaders = append(allowHeaders, middleware.ExtraCORSHeaders()...)
-
-		e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
-			AllowOrigins: cfg.CORSAllowedOrigins,
-			AllowHeaders: allowHeaders,
-		}))
-	}
-
-	h := handler.New(st)
-
-	e.GET("/healthz", h.Health)
-
-	v1 := e.Group("/v1")
-	v1.GET("/skills", h.ListSkills) // 認証不要
-	v1.GET("/me", h.Me, auth)       // 認証必須
+	e := server.New(cfg, h, auth)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

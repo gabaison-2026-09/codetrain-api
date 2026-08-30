@@ -20,22 +20,22 @@ import (
 	"github.com/gabaison-2026-09/codetrain-api/internal/config"
 )
 
-type ctxKey string
-
-// subjectKey は認証済みユーザーの sub を Echo のコンテキストに置くときのキー。
-const subjectKey ctxKey = "codetrain.subject"
+// SubjectKey は認証済みユーザーの sub を Echo のコンテキストに置くときのキー。
+// 値の設定はこのパッケージの認証ミドルウェアだけが行い、読み出しは Subject を使う。
+// 公開しているのは、handler のテストが認証済みのコンテキストを組み立てられるようにするため。
+const SubjectKey = "codetrain.subject"
 
 // ErrUnauthorized は認証に失敗したことを表す。
 var ErrUnauthorized = echo.NewHTTPError(http.StatusUnauthorized, "認証が必要です")
 
 // Subject は認証済みユーザーの sub を返す。
 func Subject(c echo.Context) (string, bool) {
-	v, ok := c.Get(string(subjectKey)).(string)
+	v, ok := c.Get(SubjectKey).(string)
 	return v, ok && v != ""
 }
 
 func setSubject(c echo.Context, sub string) {
-	c.Set(string(subjectKey), sub)
+	c.Set(SubjectKey, sub)
 }
 
 // NewAuth は AUTH_MODE に応じた認証ミドルウェアを返す。
