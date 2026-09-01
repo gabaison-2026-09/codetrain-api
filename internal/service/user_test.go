@@ -30,7 +30,7 @@ func TestUserMe(t *testing.T) {
 		repo := fakeUserRepo{
 			find: func(_ context.Context, externalID string) (domain.User, domain.Progress, error) {
 				gotExternalID = externalID
-				return domain.User{ID: 1, ExternalID: externalID, DisplayName: "テスト"},
+				return domain.User{ID: "u1", ExternalID: externalID, DisplayName: "テスト"},
 					domain.Progress{XP: 120, StreakDays: 3, Hearts: 5},
 					nil
 			},

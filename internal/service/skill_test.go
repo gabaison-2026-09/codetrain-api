@@ -31,15 +31,15 @@ func TestSkillList(t *testing.T) {
 		repo := fakeSkillRepo{
 			skills: func(context.Context) ([]domain.Skill, error) {
 				return []domain.Skill{
-					{ID: 1, Slug: "go", Name: "Go"},
-					{ID: 2, Slug: "sql", Name: "SQL"},
+					{ID: "s1", Slug: "go", Name: "Go"},
+					{ID: "s2", Slug: "sql", Name: "SQL"},
 				}, nil
 			},
 			nodes: func(context.Context) ([]domain.SkillNode, error) {
 				return []domain.SkillNode{
-					{ID: 10, SkillID: 1, Slug: "go-basics"},
-					{ID: 11, SkillID: 1, Slug: "go-slices"},
-					{ID: 20, SkillID: 2, Slug: "sql-select"},
+					{ID: "n10", SkillID: "s1", Slug: "go-basics"},
+					{ID: "n11", SkillID: "s1", Slug: "go-slices"},
+					{ID: "n20", SkillID: "s2", Slug: "sql-select"},
 				}, nil
 			},
 		}
@@ -65,7 +65,7 @@ func TestSkillList(t *testing.T) {
 	t.Run("ノードが無いスキルは Nodes が空", func(t *testing.T) {
 		repo := fakeSkillRepo{
 			skills: func(context.Context) ([]domain.Skill, error) {
-				return []domain.Skill{{ID: 1, Slug: "go"}}, nil
+				return []domain.Skill{{ID: "s1", Slug: "go"}}, nil
 			},
 			nodes: func(context.Context) ([]domain.SkillNode, error) {
 				return nil, nil
@@ -122,7 +122,7 @@ func TestSkillList(t *testing.T) {
 		t.Run("skill_node の取得で失敗", func(t *testing.T) {
 			repo := fakeSkillRepo{
 				skills: func(context.Context) ([]domain.Skill, error) {
-					return []domain.Skill{{ID: 1}}, nil
+					return []domain.Skill{{ID: "s1"}}, nil
 				},
 				nodes: func(context.Context) ([]domain.SkillNode, error) { return nil, wantErr },
 			}

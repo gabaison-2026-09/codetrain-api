@@ -20,14 +20,14 @@ func (p *Postgres) FindUserByExternalID(ctx context.Context, externalID string) 
 
 	err := p.pool.QueryRow(ctx, `
 		SELECT u.id, u.external_id, u.display_name, u.email, u.created_at,
-		       COALESCE(p.xp, 0), COALESCE(p.streak_days, 0),
+		       COALESCE(p.xp, 0), COALESCE(p.level, 1), COALESCE(p.streak_days, 0),
 		       to_char(p.last_studied_on, 'YYYY-MM-DD'),
 		       COALESCE(p.hearts, 0), p.current_skill_node_id
 		  FROM app_user u
 		  LEFT JOIN user_progress p ON p.user_id = u.id
 		 WHERE u.external_id = $1`, externalID).
 		Scan(&user.ID, &user.ExternalID, &user.DisplayName, &email, &user.CreatedAt,
-			&progress.XP, &progress.StreakDays, &lastStudied,
+			&progress.XP, &progress.Level, &progress.StreakDays, &lastStudied,
 			&progress.Hearts, &progress.CurrentSkillNodeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, domain.Progress{}, ErrNotFound

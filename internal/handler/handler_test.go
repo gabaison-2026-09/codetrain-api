@@ -97,7 +97,7 @@ func TestListSkills(t *testing.T) {
 	t.Run("スキルを返す", func(t *testing.T) {
 		h := New(nil, fakeSkills{
 			list: func(context.Context) ([]domain.Skill, error) {
-				return []domain.Skill{{ID: 1, Slug: "go", Name: "Go"}}, nil
+				return []domain.Skill{{ID: "s1", Slug: "go", Name: "Go"}}, nil
 			},
 		}, nil)
 		rec := serve(t, h.ListSkills, http.MethodGet, "/v1/skills", "")
@@ -144,7 +144,7 @@ func TestListSkills(t *testing.T) {
 //	認証済みでなければ 401、ユーザーがいなければ 404、それ以外の失敗は 500。
 func TestMe(t *testing.T) {
 	okUser := service.UserWithProgress{
-		User:     domain.User{ID: 1, ExternalID: "seed-user-01", DisplayName: "テスト"},
+		User:     domain.User{ID: "u1", ExternalID: "seed-user-01", DisplayName: "テスト"},
 		Progress: domain.Progress{XP: 120},
 	}
 
