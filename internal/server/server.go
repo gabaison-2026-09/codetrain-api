@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 
+	"github.com/gabaison-2026-09/codetrain-api/internal/apperr"
 	"github.com/gabaison-2026-09/codetrain-api/internal/config"
 	"github.com/gabaison-2026-09/codetrain-api/internal/handler"
 	"github.com/gabaison-2026-09/codetrain-api/internal/middleware"
@@ -18,6 +19,8 @@ import (
 func New(cfg config.Config, h *handler.Handler, auth echo.MiddlewareFunc) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
+	// 失敗レスポンスを共通エンベロープ {"error":{"code","message"}} に統一する。
+	e.HTTPErrorHandler = apperr.HTTPErrorHandler
 	e.Use(echomw.Recover())
 	e.Use(echomw.RequestID())
 	e.Use(echomw.Logger())
