@@ -1,0 +1,81 @@
+name: build-push
+
+# main マージで ECR push（REPOSITORIES.md §4.2、認証は codetrain-infra/docs/BOOTSTRAP.md の
+# codetrain-api-ecr-push ロール。region/account/role は本リポジトリの Variables に登録済み:
+# AWS_REGION / AWS_ACCOUNT_ID / AWS_ROLE_ECR_PUSH）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "Dockerfile"
+      - ".github/workflows/build-push.yml"
+
+concurrency:
+  group: build-push-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout は path に workspace の外（`..`）を許さないため、
+      # api・core をどちらも workspace 直下の名前付きサブディレクトリとして
+      # 横並びチェックアウトする（go.mod の
+      # `replace github.com/gabaison-2026-09/codetrain-core => ../codetrain-core` が
+      # codetrain-api/go.mod から見て正しく `../codetrain-core` を指す構成になる。
+      # REPOSITORIES.md §5 / OPEN_ISSUES D-13。core が public のためトークン不要）。
+      - uses: actions/checkout@v4
+        with:
+          path: codetrain-api
+
+      - uses: actions/checkout@v4
+        with:
+          repository: gabaison-2026-09/codetrain-core
+          path: codetrain-core
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: codetrain-api/go.mod
+
+      - name: vet & test
+        working-directory: codetrain-api
+        run: |
+          go vet ./...
+          go test ./...
+
+  build-push:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ECR_PUSH }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      # 注意: Dockerfile の `go mod download` は go.mod の
+      # `replace github.com/gabaison-2026-09/codetrain-core => ../codetrain-core` を
+      # このビルドコンテキスト（api リポジトリ単体）内では解決できない。
+      # core にタグが立って replace を外し、go.sum が実バージョンを指す状態になるまで、
+      # このステップは失敗する想定（core: gabaison-2026-09/codetrain-core#2）。
+      - name: build & push
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/codetrain-api
+        run: |
+          docker build -t "$IMAGE:${{ github.sha }}" .
+          docker push "$IMAGE:${{ github.sha }}"
