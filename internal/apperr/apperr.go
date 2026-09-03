@@ -74,6 +74,7 @@ type envelope struct {
 }
 
 type body struct {
+	Status  int    `json:"status"` // HTTP ステータスコード（数値）
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
@@ -96,7 +97,7 @@ func HTTPErrorHandler(err error, c echo.Context) {
 	if c.Request().Method == http.MethodHead {
 		writeErr = c.NoContent(status)
 	} else {
-		writeErr = c.JSON(status, envelope{Error: body{Code: code, Message: msg}})
+		writeErr = c.JSON(status, envelope{Error: body{Status: status, Code: code, Message: msg}})
 	}
 	if writeErr != nil {
 		c.Logger().Errorf("エラーレスポンスの送信に失敗: %v", writeErr)

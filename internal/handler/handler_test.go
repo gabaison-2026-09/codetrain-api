@@ -205,12 +205,16 @@ func TestMe(t *testing.T) {
 				}
 				var env struct {
 					Error struct {
+						Status  int    `json:"status"`
 						Code    string `json:"code"`
 						Message string `json:"message"`
 					} `json:"error"`
 				}
 				if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 					t.Fatalf("エンベロープの解析に失敗: %v (body=%s)", err, rec.Body.String())
+				}
+				if env.Error.Status != tt.wantStatus {
+					t.Errorf("error.status = %d, want %d", env.Error.Status, tt.wantStatus)
 				}
 				if env.Error.Code != tt.wantCode {
 					t.Errorf("error.code = %q, want %q", env.Error.Code, tt.wantCode)
