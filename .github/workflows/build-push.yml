@@ -25,27 +25,16 @@ jobs:
     permissions:
       contents: read
     steps:
-      # actions/checkout は path に workspace の外（`..`）を許さないため、
-      # api・core をどちらも workspace 直下の名前付きサブディレクトリとして
-      # 横並びチェックアウトする（go.mod の
-      # `replace github.com/gabaison-2026-09/codetrain-core => ../codetrain-core` が
-      # codetrain-api/go.mod から見て正しく `../codetrain-core` を指す構成になる。
-      # REPOSITORIES.md §5 / OPEN_ISSUES D-13。core が public のためトークン不要）。
+      # codetrain-core は Go module としてバージョン固定で参照する（go.mod の
+      # `require github.com/gabaison-2026-09/codetrain-core vX.Y.Z`）。core は public
+      # なので proxy 経由でそのまま取得でき、横並びチェックアウトは不要。
       - uses: actions/checkout@v4
-        with:
-          path: codetrain-api
-
-      - uses: actions/checkout@v4
-        with:
-          repository: gabaison-2026-09/codetrain-core
-          path: codetrain-core
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: codetrain-api/go.mod
+          go-version-file: go.mod
 
       - name: vet & test
-        working-directory: codetrain-api
         run: |
           go vet ./...
           go test ./...
@@ -68,11 +57,6 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
 
-      # 注意: Dockerfile の `go mod download` は go.mod の
-      # `replace github.com/gabaison-2026-09/codetrain-core => ../codetrain-core` を
-      # このビルドコンテキスト（api リポジトリ単体）内では解決できない。
-      # core にタグが立って replace を外し、go.sum が実バージョンを指す状態になるまで、
-      # このステップは失敗する想定（core: gabaison-2026-09/codetrain-core#2）。
       - name: build & push
         env:
           IMAGE: ${{ steps.ecr.outputs.registry }}/codetrain-api
