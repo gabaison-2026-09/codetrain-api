@@ -14,11 +14,16 @@ import (
 )
 
 type fakeQuestionRepo struct {
-	search func(ctx context.Context, userID string, q domain.QuestionSearch) ([]domain.QuestionSummary, error)
+	search          func(ctx context.Context, userID string, q domain.QuestionSearch) ([]domain.QuestionSummary, error)
+	findPublishedBy func(ctx context.Context, userID, questionID string) (domain.Question, bool, error)
 }
 
 func (f fakeQuestionRepo) SearchQuestions(ctx context.Context, userID string, q domain.QuestionSearch) ([]domain.QuestionSummary, error) {
 	return f.search(ctx, userID, q)
+}
+
+func (f fakeQuestionRepo) FindPublishedByID(ctx context.Context, userID, questionID string) (domain.Question, bool, error) {
+	return f.findPublishedBy(ctx, userID, questionID)
 }
 
 func TestQuestionList(t *testing.T) {
@@ -200,6 +205,120 @@ func TestQuestionList(t *testing.T) {
 		})
 
 		_, err := svc.List(context.Background(), "seed-user-01", QuestionSearchParams{Limit: 20})
+		if !errors.Is(err, wantErr) {
+			t.Errorf("err = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestQuestionGetForUser(t *testing.T) {
+	user := fakeUserRepo{
+		find: func(context.Context, string) (domain.User, domain.Progress, error) {
+			return domain.User{ID: "u1", ExternalID: "seed-user-01"}, domain.Progress{}, nil
+		},
+	}
+	baseQ := domain.Question{
+		ID:          "q1",
+		Type:        domain.QuestionTypeCodeReading,
+		Difficulty:  2,
+		Title:       "配列メソッドの挙動",
+		Body:        "次のコードの出力は？",
+		Choices:     []domain.Choice{{Key: "a", Text: "[1,2,3]"}, {Key: "b", Text: "[2,4,6]"}},
+		CorrectKeys: []string{"b"},
+		Explanation: "map は各要素に関数を適用した新配列を返す",
+		Tags:        []string{"array"},
+	}
+
+	t.Run("未回答なら correct_keys/explanation が nil", func(t *testing.T) {
+		svc := NewQuestion(user, fakeQuestionRepo{
+			findPublishedBy: func(_ context.Context, userID, qID string) (domain.Question, bool, error) {
+				if userID != "u1" || qID != "q1" {
+					t.Errorf("args = (%q, %q)", userID, qID)
+				}
+				return baseQ, false, nil
+			},
+		})
+
+		got, err := svc.GetForUser(context.Background(), "seed-user-01", "q1")
+		if err != nil {
+			t.Fatalf("GetForUser: %v", err)
+		}
+		if got.Answered {
+			t.Error("Answered = true, want false")
+		}
+		if got.CorrectKeys != nil {
+			t.Errorf("CorrectKeys = %v, want nil", got.CorrectKeys)
+		}
+		if got.Explanation != nil {
+			t.Errorf("Explanation = %v, want nil", got.Explanation)
+		}
+		if got.Title != "配列メソッドの挙動" {
+			t.Errorf("Title = %q", got.Title)
+		}
+	})
+
+	t.Run("回答済みなら correct_keys/explanation が入る", func(t *testing.T) {
+		svc := NewQuestion(user, fakeQuestionRepo{
+			findPublishedBy: func(context.Context, string, string) (domain.Question, bool, error) {
+				return baseQ, true, nil
+			},
+		})
+
+		got, err := svc.GetForUser(context.Background(), "seed-user-01", "q1")
+		if err != nil {
+			t.Fatalf("GetForUser: %v", err)
+		}
+		if !got.Answered {
+			t.Error("Answered = false, want true")
+		}
+		if got.CorrectKeys == nil || len(*got.CorrectKeys) != 1 || (*got.CorrectKeys)[0] != "b" {
+			t.Errorf("CorrectKeys = %v, want [b]", got.CorrectKeys)
+		}
+		if got.Explanation == nil || *got.Explanation != baseQ.Explanation {
+			t.Errorf("Explanation = %v, want %q", got.Explanation, baseQ.Explanation)
+		}
+	})
+
+	t.Run("ErrNotFound を ErrQuestionNotFound に翻訳する", func(t *testing.T) {
+		svc := NewQuestion(user, fakeQuestionRepo{
+			findPublishedBy: func(context.Context, string, string) (domain.Question, bool, error) {
+				return domain.Question{}, false, repository.ErrNotFound
+			},
+		})
+
+		_, err := svc.GetForUser(context.Background(), "seed-user-01", "q1")
+		if !errors.Is(err, ErrQuestionNotFound) {
+			t.Errorf("err = %v, want %v", err, ErrQuestionNotFound)
+		}
+	})
+
+	t.Run("未登録ユーザーは ErrUserNotFound", func(t *testing.T) {
+		svc := NewQuestion(fakeUserRepo{
+			find: func(context.Context, string) (domain.User, domain.Progress, error) {
+				return domain.User{}, domain.Progress{}, repository.ErrNotFound
+			},
+		}, fakeQuestionRepo{
+			findPublishedBy: func(context.Context, string, string) (domain.Question, bool, error) {
+				t.Fatal("未登録なら問題検索しない")
+				return domain.Question{}, false, nil
+			},
+		})
+
+		_, err := svc.GetForUser(context.Background(), "no-such-user", "q1")
+		if !errors.Is(err, ErrUserNotFound) {
+			t.Errorf("err = %v, want %v", err, ErrUserNotFound)
+		}
+	})
+
+	t.Run("repository のエラーを伝播する", func(t *testing.T) {
+		wantErr := errors.New("DB 障害")
+		svc := NewQuestion(user, fakeQuestionRepo{
+			findPublishedBy: func(context.Context, string, string) (domain.Question, bool, error) {
+				return domain.Question{}, false, wantErr
+			},
+		})
+
+		_, err := svc.GetForUser(context.Background(), "seed-user-01", "q1")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("err = %v, want %v", err, wantErr)
 		}

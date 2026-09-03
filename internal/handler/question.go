@@ -18,6 +18,31 @@ import (
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+// GetQuestion は GET /v1/questions/:id。認証必須。
+func (h *Handler) GetQuestion(c echo.Context) error {
+	sub, ok := middleware.Subject(c)
+	if !ok {
+		return apperr.Unauthorized("認証が必要です")
+	}
+
+	id := c.Param("id")
+	if !uuidPattern.MatchString(id) {
+		return apperr.Validation("id は uuid 形式で指定してください")
+	}
+
+	detail, err := h.questions.GetForUser(c.Request().Context(), sub, id)
+	if errors.Is(err, service.ErrUserNotFound) {
+		return apperr.New(apperr.CodeUserNotFound, http.StatusNotFound, "ユーザーが見つかりません: "+sub)
+	}
+	if errors.Is(err, service.ErrQuestionNotFound) {
+		return apperr.New(apperr.CodeQuestionNotFound, http.StatusNotFound, "問題が見つかりません")
+	}
+	if err != nil {
+		return internalError(c, "問題の取得に失敗しました", err)
+	}
+	return c.JSON(http.StatusOK, detail)
+}
+
 // ListQuestions は GET /v1/questions。認証必須。
 func (h *Handler) ListQuestions(c echo.Context) error {
 	sub, ok := middleware.Subject(c)

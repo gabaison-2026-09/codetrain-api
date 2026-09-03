@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -87,6 +88,76 @@ SELECT q.id, q.type, q.difficulty, q.title, COALESCE(q.code_language, ''),
 		}
 		return s, err
 	})
+}
+
+// FindPublishedByID は status=published の問題を1件取得する。
+// raw_source を JOIN して Attribution を組み立て、attempt の EXISTS で answered を判定する。
+// 該当行がなければ ErrNotFound を返す。
+func (p *Postgres) FindPublishedByID(ctx context.Context, userID, questionID string) (domain.Question, bool, error) {
+	var q domain.Question
+	var code, codeLang, explanation *string
+	var repoFullName, repoURL, commitSHA, licenseSPDX string
+	var filePath, licenseURL, authorAttribution *string
+	var answered bool
+
+	err := p.pool.QueryRow(ctx, `
+SELECT q.id, q.skill_node_id, q.type, q.difficulty, q.title, q.body,
+       q.code, q.code_language, q.choices, q.correct_keys, q.explanation, q.tags,
+       rs.repo_full_name, rs.repo_url, rs.commit_sha, rs.file_path,
+       rs.license_spdx, rs.license_url, rs.author_attribution,
+       EXISTS(SELECT 1 FROM attempt a WHERE a.user_id = $1 AND a.question_id = q.id) AS answered
+  FROM question q
+  JOIN raw_source rs ON rs.id = q.raw_source_id
+ WHERE q.id = $2 AND q.status = 'published'`,
+		userID, questionID).
+		Scan(&q.ID, &q.SkillNodeID, &q.Type, &q.Difficulty, &q.Title, &q.Body,
+			&code, &codeLang, &q.Choices, &q.CorrectKeys, &explanation, &q.Tags,
+			&repoFullName, &repoURL, &commitSHA, &filePath,
+			&licenseSPDX, &licenseURL, &authorAttribution,
+			&answered)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Question{}, false, ErrNotFound
+	}
+	if err != nil {
+		return domain.Question{}, false, err
+	}
+
+	if code != nil {
+		q.Code = *code
+	}
+	if codeLang != nil {
+		q.CodeLanguage = *codeLang
+	}
+	if explanation != nil {
+		q.Explanation = *explanation
+	}
+	if q.Tags == nil {
+		q.Tags = []string{}
+	}
+	if q.CorrectKeys == nil {
+		q.CorrectKeys = []string{}
+	}
+	if q.Choices == nil {
+		q.Choices = []domain.Choice{}
+	}
+
+	q.Attribution = &domain.Attribution{
+		RepoFullName: repoFullName,
+		RepoURL:      repoURL,
+		CommitSHA:    commitSHA,
+		LicenseSPDX:  licenseSPDX,
+	}
+	if filePath != nil {
+		q.Attribution.FilePath = *filePath
+	}
+	if licenseURL != nil {
+		q.Attribution.LicenseURL = *licenseURL
+	}
+	if authorAttribution != nil {
+		q.Attribution.Author = *authorAttribution
+	}
+
+	return q, answered, nil
 }
 
 func escapeLike(s string) string {
