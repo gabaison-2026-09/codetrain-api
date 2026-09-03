@@ -53,6 +53,10 @@ type TaskOptionLister interface {
 	SetSlot(ctx context.Context, externalID string, slot domain.TaskConfig) (domain.TaskConfig, error)
 }
 
+type CalendarGetter interface {
+	Get(ctx context.Context, externalID, from, to string) (domain.Calendar, error)
+}
+
 type Handler struct {
 	health      HealthChecker
 	skills      SkillLister
@@ -61,6 +65,7 @@ type Handler struct {
 	srs         SRSDueLister
 	taskSlots   TaskSlotLister
 	taskOptions TaskOptionLister
+	calendar    CalendarGetter
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
@@ -73,6 +78,7 @@ type Deps struct {
 	SRS         SRSDueLister
 	TaskSlots   TaskSlotLister
 	TaskOptions TaskOptionLister
+	Calendar    CalendarGetter
 }
 
 func New(deps Deps) *Handler {
@@ -84,5 +90,6 @@ func New(deps Deps) *Handler {
 		srs:         deps.SRS,
 		taskSlots:   deps.TaskSlots,
 		taskOptions: deps.TaskOptions,
+		calendar:    deps.Calendar,
 	}
 }
