@@ -15,7 +15,7 @@ import (
 // repository.ErrNotFound を ErrUserNotFound に翻訳する唯一の場所であり、
 // handler はこの service 語彙だけを見てステータス変換する。
 type userResolver struct {
-	repo UserRepository
+	repo UserLookupRepository
 }
 
 // resolveUser は sub からユーザーと進捗を返す。
