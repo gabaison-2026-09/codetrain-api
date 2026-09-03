@@ -56,6 +56,9 @@ type TaskOptionLister interface {
 type CalendarGetter interface {
 	Get(ctx context.Context, externalID, from, to string) (domain.Calendar, error)
 }
+type HomeGetter interface {
+	Get(ctx context.Context, externalID string) (domain.Home, error)
+}
 
 type Handler struct {
 	health      HealthChecker
@@ -66,6 +69,7 @@ type Handler struct {
 	taskSlots   TaskSlotLister
 	taskOptions TaskOptionLister
 	calendar    CalendarGetter
+	home        HomeGetter
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
@@ -79,6 +83,7 @@ type Deps struct {
 	TaskSlots   TaskSlotLister
 	TaskOptions TaskOptionLister
 	Calendar    CalendarGetter
+	Home        HomeGetter
 }
 
 func New(deps Deps) *Handler {
@@ -91,5 +96,6 @@ func New(deps Deps) *Handler {
 		taskSlots:   deps.TaskSlots,
 		taskOptions: deps.TaskOptions,
 		calendar:    deps.Calendar,
+		home:        deps.Home,
 	}
 }
