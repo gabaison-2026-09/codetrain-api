@@ -32,20 +32,26 @@ type UserFinder interface {
 	Create(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
 }
 
+type TaskOptionLister interface {
+	List(ctx context.Context, externalID string) ([]domain.TaskOption, error)
+}
+
 type Handler struct {
-	health HealthChecker
-	skills SkillLister
-	users  UserFinder
+	health      HealthChecker
+	skills      SkillLister
+	users       UserFinder
+	taskOptions TaskOptionLister
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
 // 足すだけで済み、既存の New 呼び出し（テスト含む）を壊さない。
 type Deps struct {
-	Health HealthChecker
-	Skills SkillLister
-	Users  UserFinder
+	Health      HealthChecker
+	Skills      SkillLister
+	Users       UserFinder
+	TaskOptions TaskOptionLister
 }
 
 func New(deps Deps) *Handler {
-	return &Handler{health: deps.Health, skills: deps.Skills, users: deps.Users}
+	return &Handler{health: deps.Health, skills: deps.Skills, users: deps.Users, taskOptions: deps.TaskOptions}
 }
