@@ -45,6 +45,7 @@ type SRSDueLister interface {
 
 type TaskSlotLister interface {
 	ListSlots(ctx context.Context, externalID string) ([]domain.TaskConfig, error)
+	DeleteSlot(ctx context.Context, externalID string, slotNo int) error
 }
 
 type TaskOptionLister interface {

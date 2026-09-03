@@ -36,6 +36,31 @@ func (h *Handler) ListTaskSlots(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"slots": slots})
 }
 
+// DeleteTaskSlot は DELETE /v1/task-slots/:slot_no。認証必須。
+func (h *Handler) DeleteTaskSlot(c echo.Context) error {
+	sub, ok := middleware.Subject(c)
+	if !ok {
+		return apperr.Unauthorized("認証が必要です")
+	}
+
+	slotNo, err := strconv.Atoi(c.Param("slot_no"))
+	if err != nil || slotNo < 1 || slotNo > 5 {
+		return apperr.New(apperr.CodeTaskSlotNoInvalid, http.StatusBadRequest, "slot_no は 1〜5 で指定してください")
+	}
+
+	err = h.taskSlots.DeleteSlot(c.Request().Context(), sub, slotNo)
+	if errors.Is(err, service.ErrUserNotFound) {
+		return apperr.New(apperr.CodeUserNotFound, http.StatusNotFound, "ユーザーが見つかりません: "+sub)
+	}
+	if errors.Is(err, service.ErrTaskSlotNoInvalid) {
+		return apperr.New(apperr.CodeTaskSlotNoInvalid, http.StatusNotFound, "指定されたタスクスロットは設定されていません")
+	}
+	if err != nil {
+		return internalError(c, "タスクスロットの削除に失敗しました", err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
 // TaskOptions は GET /v1/task-slots/options。認証必須。
 func (h *Handler) TaskOptions(c echo.Context) error {
 	sub, ok := middleware.Subject(c)
