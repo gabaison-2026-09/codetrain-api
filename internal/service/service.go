@@ -63,6 +63,12 @@ type AdminQuestionRepository interface {
 	SearchAdminQuestions(ctx context.Context, params domain.AdminQuestionSearch) ([]domain.AdminQuestionSummary, error)
 }
 
+// AdminQuestionDetailRepository は管理者向け問題詳細とレビュー履歴を取得する。
+type AdminQuestionDetailRepository interface {
+	FindQuestionFull(ctx context.Context, questionID string) (domain.AdminQuestion, error)
+	ListReviewHistory(ctx context.Context, questionID string) ([]domain.ReviewEntry, error)
+}
+
 // ReviewQueueRepository は未レビュー問題のキューを取得する。
 type ReviewQueueRepository interface {
 	ListReviewQueue(ctx context.Context, cursorQueuedAt *time.Time, cursorID string, limit int) ([]domain.ReviewQueueItem, error)

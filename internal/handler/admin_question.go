@@ -36,6 +36,31 @@ func (h *Handler) AdminListQuestions(c echo.Context) error {
 	return c.JSON(http.StatusOK, list)
 }
 
+// AdminGetQuestion は GET /v1/admin/questions/:id。認証とレビュアー権限が必須。
+func (h *Handler) AdminGetQuestion(c echo.Context) error {
+	if _, ok := middleware.Subject(c); !ok {
+		return apperr.Unauthorized("認証が必要です")
+	}
+
+	id := c.Param("id")
+	if !uuidPattern.MatchString(id) {
+		return apperr.Validation("id は uuid 形式で指定してください")
+	}
+
+	question, err := h.adminGetter.Get(c.Request().Context(), id)
+	if errors.Is(err, service.ErrQuestionNotFound) {
+		return apperr.New(apperr.CodeQuestionNotFound, http.StatusNotFound, "問題が見つかりません")
+	}
+	if err != nil {
+		var apiErr *apperr.APIError
+		if errors.As(err, &apiErr) {
+			return apiErr
+		}
+		return internalError(c, "管理者向け問題の取得に失敗しました", err)
+	}
+	return c.JSON(http.StatusOK, question)
+}
+
 func parseAdminQuestionSearch(c echo.Context) (service.AdminQuestionSearchParams, error) {
 	page, err := paging.ParseParams(c)
 	if err != nil {

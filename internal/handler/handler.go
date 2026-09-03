@@ -43,6 +43,10 @@ type AdminQuestionLister interface {
 	List(ctx context.Context, params service.AdminQuestionSearchParams) (service.AdminQuestionList, error)
 }
 
+type AdminQuestionGetter interface {
+	Get(ctx context.Context, questionID string) (domain.AdminQuestion, error)
+}
+
 type ReviewQueueLister interface {
 	List(ctx context.Context, params service.ReviewQueueParams) (service.ReviewQueueList, error)
 }
@@ -78,6 +82,7 @@ type Handler struct {
 	users       UserFinder
 	questions   QuestionLister
 	admin       AdminQuestionLister
+	adminGetter AdminQuestionGetter
 	reviewQueue ReviewQueueLister
 	srs         SRSDueLister
 	taskSlots   TaskSlotLister
@@ -95,6 +100,7 @@ type Deps struct {
 	Users       UserFinder
 	Questions   QuestionLister
 	Admin       AdminQuestionLister
+	AdminGetter AdminQuestionGetter
 	ReviewQueue ReviewQueueLister
 	SRS         SRSDueLister
 	TaskSlots   TaskSlotLister
@@ -111,6 +117,7 @@ func New(deps Deps) *Handler {
 		users:       deps.Users,
 		questions:   deps.Questions,
 		admin:       deps.Admin,
+		adminGetter: deps.AdminGetter,
 		reviewQueue: deps.ReviewQueue,
 		srs:         deps.SRS,
 		taskSlots:   deps.TaskSlots,
