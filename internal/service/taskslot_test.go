@@ -6,98 +6,70 @@ import (
 	"testing"
 
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
-
-	"github.com/gabaison-2026-09/codetrain-api/internal/repository"
 )
 
-type fakeTaskOptionRepo struct {
-	find func(context.Context, string) (domain.User, domain.Progress, error)
-	list func(context.Context) ([]domain.TaskOption, error)
+type fakeTaskSlotRepo struct {
+	list func(context.Context, string) ([]domain.TaskConfig, error)
 }
 
-func (f fakeTaskOptionRepo) FindUserByExternalID(ctx context.Context, externalID string) (domain.User, domain.Progress, error) {
-	return f.find(ctx, externalID)
+func (f fakeTaskSlotRepo) ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error) {
+	return f.list(ctx, userID)
 }
 
-func (f fakeTaskOptionRepo) ListTaskOptions(ctx context.Context) ([]domain.TaskOption, error) {
-	return f.list(ctx)
+func TestTaskSlotListSlots(t *testing.T) {
+	var gotUserID string
+	difficulty := 3
+	svc := NewTaskSlot(fakeUserRepo{
+		find: func(context.Context, string) (domain.User, domain.Progress, error) {
+			return domain.User{ID: "u1"}, domain.Progress{}, nil
+		},
+	}, fakeTaskSlotRepo{
+		list: func(_ context.Context, userID string) ([]domain.TaskConfig, error) {
+			gotUserID = userID
+			return []domain.TaskConfig{
+				{SlotNo: 1, QuestionType: domain.QuestionTypeCodeReading, Language: "typescript"},
+				{SlotNo: 2, QuestionType: domain.QuestionTypeOutputPrediction, Difficulty: &difficulty},
+			}, nil
+		},
+	})
+
+	got, err := svc.ListSlots(context.Background(), "seed-user-01")
+	if err != nil {
+		t.Fatalf("ListSlots: %v", err)
+	}
+	if gotUserID != "u1" {
+		t.Fatalf("repository userID = %q, want %q", gotUserID, "u1")
+	}
+	if len(got) != 2 || got[1].Difficulty == nil || *got[1].Difficulty != 3 {
+		t.Fatalf("slots = %+v", got)
+	}
 }
 
-func TestTaskSlotList(t *testing.T) {
-	t.Run("ユーザー確認後に候補を返す", func(t *testing.T) {
-		var gotExternalID string
-		repo := fakeTaskOptionRepo{
-			find: func(_ context.Context, externalID string) (domain.User, domain.Progress, error) {
-				gotExternalID = externalID
-				return domain.User{ID: "u1"}, domain.Progress{}, nil
-			},
-			list: func(context.Context) ([]domain.TaskOption, error) {
-				return []domain.TaskOption{{QuestionType: domain.QuestionTypeCodeReading, Language: "typescript", Difficulty: 1}}, nil
-			},
-		}
-
-		got, err := NewTaskSlot(repo).List(context.Background(), "seed-user-01")
-		if err != nil {
-			t.Fatalf("List: %v", err)
-		}
-		if gotExternalID != "seed-user-01" {
-			t.Errorf("external_id = %q, want seed-user-01", gotExternalID)
-		}
-		if len(got) != 1 || got[0].Language != "typescript" {
-			t.Errorf("options = %+v", got)
-		}
+func TestTaskSlotListSlotsEmptyIsArray(t *testing.T) {
+	svc := NewTaskSlot(fakeUserRepo{
+		find: func(context.Context, string) (domain.User, domain.Progress, error) {
+			return domain.User{ID: "u1"}, domain.Progress{}, nil
+		},
+	}, fakeTaskSlotRepo{
+		list: func(context.Context, string) ([]domain.TaskConfig, error) { return nil, nil },
 	})
 
-	t.Run("候補0件は nil ではなく空配列を返す", func(t *testing.T) {
-		repo := fakeTaskOptionRepo{
-			find: func(context.Context, string) (domain.User, domain.Progress, error) {
-				return domain.User{ID: "u1"}, domain.Progress{}, nil
-			},
-			list: func(context.Context) ([]domain.TaskOption, error) { return nil, nil },
-		}
+	got, err := svc.ListSlots(context.Background(), "seed-user-01")
+	if err != nil || got == nil || len(got) != 0 {
+		t.Fatalf("slots = %#v, err = %v", got, err)
+	}
+}
 
-		got, err := NewTaskSlot(repo).List(context.Background(), "seed-user-01")
-		if err != nil {
-			t.Fatalf("List: %v", err)
-		}
-		if got == nil || len(got) != 0 {
-			t.Errorf("options = %#v, want non-nil empty slice", got)
-		}
+func TestTaskSlotListSlotsResolvesUserError(t *testing.T) {
+	svc := NewTaskSlot(fakeUserRepo{
+		find: func(context.Context, string) (domain.User, domain.Progress, error) {
+			return domain.User{}, domain.Progress{}, errors.New("DB障害")
+		},
+	}, fakeTaskSlotRepo{
+		list: func(context.Context, string) ([]domain.TaskConfig, error) { t.Fatal("not called"); return nil, nil },
 	})
 
-	t.Run("未登録ユーザーは候補を取得せず ErrUserNotFound", func(t *testing.T) {
-		listCalled := false
-		repo := fakeTaskOptionRepo{
-			find: func(context.Context, string) (domain.User, domain.Progress, error) {
-				return domain.User{}, domain.Progress{}, repository.ErrNotFound
-			},
-			list: func(context.Context) ([]domain.TaskOption, error) {
-				listCalled = true
-				return nil, nil
-			},
-		}
-
-		_, err := NewTaskSlot(repo).List(context.Background(), "no-such-user")
-		if !errors.Is(err, ErrUserNotFound) {
-			t.Errorf("err = %v, want %v", err, ErrUserNotFound)
-		}
-		if listCalled {
-			t.Error("ユーザー確認失敗後に ListTaskOptions が呼ばれた")
-		}
-	})
-
-	t.Run("候補取得エラーを伝播する", func(t *testing.T) {
-		wantErr := errors.New("DB 障害")
-		repo := fakeTaskOptionRepo{
-			find: func(context.Context, string) (domain.User, domain.Progress, error) {
-				return domain.User{ID: "u1"}, domain.Progress{}, nil
-			},
-			list: func(context.Context) ([]domain.TaskOption, error) { return nil, wantErr },
-		}
-
-		_, err := NewTaskSlot(repo).List(context.Background(), "seed-user-01")
-		if !errors.Is(err, wantErr) {
-			t.Errorf("err = %v, want %v", err, wantErr)
-		}
-	})
+	if _, err := svc.ListSlots(context.Background(), "seed-user-01"); err == nil {
+		t.Fatal("expected error")
+	}
 }

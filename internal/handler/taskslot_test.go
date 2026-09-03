@@ -13,102 +13,88 @@ import (
 	"github.com/gabaison-2026-09/codetrain-api/internal/service"
 )
 
-type fakeTaskOptions struct {
-	list func(context.Context, string) ([]domain.TaskOption, error)
+type fakeTaskSlotLister struct {
+	list func(context.Context, string) ([]domain.TaskConfig, error)
 }
 
-func (f fakeTaskOptions) List(ctx context.Context, externalID string) ([]domain.TaskOption, error) {
+func (f fakeTaskSlotLister) ListSlots(ctx context.Context, externalID string) ([]domain.TaskConfig, error) {
 	return f.list(ctx, externalID)
 }
 
-func TestTaskOptions(t *testing.T) {
-	tests := []struct {
-		name       string
-		sub        string
-		list       func(context.Context, string) ([]domain.TaskOption, error)
-		wantStatus int
-		wantCode   string
-	}{
-		{
-			name: "候補を返す",
-			sub:  "seed-user-01",
-			list: func(_ context.Context, externalID string) ([]domain.TaskOption, error) {
-				if externalID != "seed-user-01" {
-					t.Errorf("external_id = %q", externalID)
-				}
-				return []domain.TaskOption{{QuestionType: domain.QuestionTypeCodeReading, Language: "typescript", Difficulty: 1}}, nil
-			},
-			wantStatus: http.StatusOK,
+func TestListTaskSlots(t *testing.T) {
+	difficulty := 3
+	h := New(Deps{TaskSlots: fakeTaskSlotLister{
+		list: func(_ context.Context, externalID string) ([]domain.TaskConfig, error) {
+			if externalID != "seed-user-01" {
+				t.Errorf("externalID = %q", externalID)
+			}
+			return []domain.TaskConfig{
+				{SlotNo: 1, QuestionType: domain.QuestionTypeCodeReading, Language: "typescript"},
+				{SlotNo: 2, QuestionType: domain.QuestionTypeOutputPrediction, Difficulty: &difficulty},
+			}, nil
 		},
-		{
-			name:       "sub が無ければ 401",
-			sub:        "",
-			list:       func(context.Context, string) ([]domain.TaskOption, error) { return nil, nil },
-			wantStatus: http.StatusUnauthorized,
-			wantCode:   apperr.CodeUnauthorized,
-		},
-		{
-			name: "ユーザーが無ければ 404",
-			sub:  "no-such-user",
-			list: func(context.Context, string) ([]domain.TaskOption, error) {
-				return nil, service.ErrUserNotFound
-			},
-			wantStatus: http.StatusNotFound,
-			wantCode:   apperr.CodeUserNotFound,
-		},
-		{
-			name: "その他の失敗は 500",
-			sub:  "seed-user-01",
-			list: func(context.Context, string) ([]domain.TaskOption, error) {
-				return nil, errors.New("DB 障害")
-			},
-			wantStatus: http.StatusInternalServerError,
-			wantCode:   apperr.CodeInternalError,
-		},
+	}})
+	rec := serve(t, h.ListTaskSlots, http.MethodGet, "/v1/task-slots", "seed-user-01")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
 	}
+	var body struct {
+		Slots []struct {
+			Difficulty *int `json:"difficulty"`
+		} `json:"slots"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Slots) != 2 || body.Slots[0].Difficulty != nil ||
+		body.Slots[1].Difficulty == nil || *body.Slots[1].Difficulty != 3 {
+		t.Fatalf("slots = %+v", body.Slots)
+	}
+}
 
+func TestListTaskSlotsEmptyIsArray(t *testing.T) {
+	h := New(Deps{TaskSlots: fakeTaskSlotLister{
+		list: func(context.Context, string) ([]domain.TaskConfig, error) {
+			return []domain.TaskConfig{}, nil
+		},
+	}})
+	rec := serve(t, h.ListTaskSlots, http.MethodGet, "/v1/task-slots", "seed-user-01")
+	if got := rec.Body.String(); got != "{\"slots\":[]}\n" {
+		t.Fatalf("body = %q", got)
+	}
+}
+
+func TestListTaskSlotsErrors(t *testing.T) {
+	tests := []struct {
+		name, sub string
+		err       error
+		status    int
+		code      string
+	}{
+		{"unauthorized", "", nil, http.StatusUnauthorized, apperr.CodeUnauthorized},
+		{"not found", "unknown", service.ErrUserNotFound, http.StatusNotFound, apperr.CodeUserNotFound},
+		{"internal", "seed-user-01", errors.New("DB障害"), http.StatusInternalServerError, apperr.CodeInternalError},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := New(Deps{TaskOptions: fakeTaskOptions{list: tt.list}})
-			rec := serve(t, h.TaskOptions, http.MethodGet, "/v1/task-slots/options", tt.sub)
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d (body=%s)", rec.Code, tt.wantStatus, rec.Body.String())
+			h := New(Deps{TaskSlots: fakeTaskSlotLister{
+				list: func(context.Context, string) ([]domain.TaskConfig, error) { return nil, tt.err },
+			}})
+			rec := serve(t, h.ListTaskSlots, http.MethodGet, "/v1/task-slots", tt.sub)
+			if rec.Code != tt.status {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.status)
 			}
-
-			if tt.wantStatus == http.StatusOK {
-				var body struct {
-					Options []domain.TaskOption `json:"options"`
-				}
-				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-					t.Fatalf("response: %v", err)
-				}
-				if len(body.Options) != 1 || body.Options[0].Difficulty != 1 {
-					t.Errorf("options = %+v", body.Options)
-				}
-				return
-			}
-
-			var env struct {
+			var body struct {
 				Error struct {
 					Code string `json:"code"`
 				} `json:"error"`
 			}
-			if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
-				t.Fatalf("response: %v", err)
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
 			}
-			if env.Error.Code != tt.wantCode {
-				t.Errorf("error.code = %q, want %q", env.Error.Code, tt.wantCode)
+			if body.Error.Code != tt.code {
+				t.Errorf("error.code = %q, want %q", body.Error.Code, tt.code)
 			}
 		})
 	}
-
-	t.Run("0件でも options は配列", func(t *testing.T) {
-		h := New(Deps{TaskOptions: fakeTaskOptions{list: func(context.Context, string) ([]domain.TaskOption, error) {
-			return []domain.TaskOption{}, nil
-		}}})
-		rec := serve(t, h.TaskOptions, http.MethodGet, "/v1/task-slots/options", "seed-user-01")
-		if got := rec.Body.String(); got != "{\"options\":[]}\n" {
-			t.Errorf("body = %q", got)
-		}
-	})
 }

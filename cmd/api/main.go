@@ -56,7 +56,8 @@ func run() error {
 		Health:      service.NewHealth(repo),
 		Skills:      service.NewSkill(repo),
 		Users:       service.NewUser(repo),
-		TaskOptions: service.NewTaskSlot(repo),
+		TaskSlots:   service.NewTaskSlot(repo, repo),
+		TaskOptions: service.NewTaskOptions(repo),
 		Questions:   service.NewQuestion(repo, repo),
 		SRS:         service.NewSRS(repo, repo),
 	})
