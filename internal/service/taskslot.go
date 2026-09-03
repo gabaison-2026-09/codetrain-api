@@ -55,3 +55,25 @@ func (s *TaskSlot) List(ctx context.Context, externalID string) ([]domain.TaskOp
 func NewTaskOptions(repo TaskOptionRepository) *TaskSlot {
 	return &TaskSlot{userResolver: userResolver{repo: repo}, options: repo}
 }
+
+// SetSlot は認証ユーザーのタスクスロットを新規作成または更新する。
+func (s *TaskSlot) SetSlot(ctx context.Context, externalID string, slot domain.TaskConfig) (domain.TaskConfig, error) {
+	if slot.SlotNo < 1 || slot.SlotNo > 5 {
+		return domain.TaskConfig{}, ErrTaskSlotNoInvalid
+	}
+
+	userID, err := s.resolveUserID(ctx, externalID)
+	if err != nil {
+		return domain.TaskConfig{}, err
+	}
+
+	exists, err := s.options.OptionExists(ctx, slot.QuestionType, slot.Language, slot.Difficulty)
+	if err != nil {
+		return domain.TaskConfig{}, err
+	}
+	if !exists {
+		return domain.TaskConfig{}, ErrTaskSlotOptionInvalid
+	}
+
+	return s.options.UpsertUserTask(ctx, userID, slot)
+}
