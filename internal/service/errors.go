@@ -8,6 +8,11 @@ import "errors"
 // （repository のエラーを直接見ない）。
 var ErrUserNotFound = errors.New("ユーザーが見つかりません")
 
+// ErrQuestionNotFound は指定された問題が存在しない（または published でない）ことを表す。
+// repository.ErrNotFound をユースケースの語彙に翻訳したもので、
+// handler はこれだけを見て 404 QUESTION_NOT_FOUND を返す。
+var ErrQuestionNotFound = errors.New("問題が見つかりません")
+
 // ErrUserAlreadyProvisioned は同じ external_id の app_user が既に存在することを表す。
 // repository.ErrAlreadyExists をユースケース語彙に翻訳したもので、
 // handler はこれだけを見て 409 USER_ALREADY_PROVISIONED を返す。

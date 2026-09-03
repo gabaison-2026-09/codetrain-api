@@ -19,6 +19,13 @@ type HealthRepository interface {
 	Ping(ctx context.Context) error
 }
 
+// UserPatch はユーザープロフィールの部分更新内容。
+// nilのフィールドは更新しない。
+type UserPatch struct {
+	DisplayName *string
+	AvatarURL   *string
+}
+
 // SkillRepository はスキルツリーの取得。行を返すだけで、組み立ては service が行う。
 type SkillRepository interface {
 	ListSkills(ctx context.Context) ([]domain.Skill, error)
@@ -34,6 +41,25 @@ type UserLookupRepository interface {
 type UserRepository interface {
 	UserLookupRepository
 	InsertUser(ctx context.Context, externalID, displayName string, avatarURL *string) (domain.User, domain.Progress, error)
+	UpdateUser(
+		ctx context.Context,
+		externalID string,
+		displayName *string,
+		avatarURL *string,
+	) (domain.User, error)
+}
+
+// QuestionRepository は published 問題の検索・取得。行を返すだけで、ページングは service が行う。
+type QuestionRepository interface {
+	SearchQuestions(ctx context.Context, userID string, q domain.QuestionSearch) ([]domain.QuestionSummary, error)
+	// FindPublishedByID は status=published の問題を1件返す。answered は
+	// 当該ユーザーの attempt が存在するかどうか。該当行がなければ repository.ErrNotFound。
+	FindPublishedByID(ctx context.Context, userID, questionID string) (domain.Question, bool, error)
+}
+
+// SRSRepository は復習期限の問題を取得する。
+type SRSRepository interface {
+	ListDue(ctx context.Context, userID string, limit int) ([]domain.SRSDueItem, error)
 }
 
 // TaskOptionRepository は認証ユーザーの解決とタスク候補の取得。

@@ -3,9 +3,6 @@
 // この層の責務は HTTP の関心だけ —— リクエストからの値の取り出し、
 // service 層の呼び出し、エラーからステータスコードへの変換、JSON 化。
 // ビジネスロジックは service 層に置き、ここには書かない。
-//
-// 今回のスコープはローカル環境が立ち上がったことを確認できる最小限
-// （/healthz・/v1/skills・/v1/me）。MVP ループの実装は Phase 2 で追加する。
 package handler
 
 import (
@@ -30,6 +27,20 @@ type SkillLister interface {
 type UserFinder interface {
 	Me(ctx context.Context, externalID string) (service.UserWithProgress, error)
 	Create(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
+	Update(
+		ctx context.Context,
+		externalID string,
+		patch service.UserPatch,
+	) (domain.User, error)
+}
+
+type QuestionLister interface {
+	List(ctx context.Context, externalID string, params service.QuestionSearchParams) (service.QuestionList, error)
+	GetForUser(ctx context.Context, externalID, questionID string) (domain.QuestionDetail, error)
+}
+
+type SRSDueLister interface {
+	ListDue(ctx context.Context, externalID string, limit int) ([]domain.SRSDueItem, error)
 }
 
 type TaskOptionLister interface {
@@ -41,6 +52,8 @@ type Handler struct {
 	skills      SkillLister
 	users       UserFinder
 	taskOptions TaskOptionLister
+	questions   QuestionLister
+	srs         SRSDueLister
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
@@ -50,8 +63,17 @@ type Deps struct {
 	Skills      SkillLister
 	Users       UserFinder
 	TaskOptions TaskOptionLister
+	Questions   QuestionLister
+	SRS         SRSDueLister
 }
 
 func New(deps Deps) *Handler {
-	return &Handler{health: deps.Health, skills: deps.Skills, users: deps.Users, taskOptions: deps.TaskOptions}
+	return &Handler{
+		health:      deps.Health,
+		skills:      deps.Skills,
+		users:       deps.Users,
+		taskOptions: deps.TaskOptions,
+		questions:   deps.Questions,
+		srs:         deps.SRS,
+	}
 }

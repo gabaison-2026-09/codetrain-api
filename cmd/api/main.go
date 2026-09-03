@@ -57,6 +57,8 @@ func run() error {
 		Skills:      service.NewSkill(repo),
 		Users:       service.NewUser(repo),
 		TaskOptions: service.NewTaskSlot(repo),
+		Questions:   service.NewQuestion(repo, repo),
+		SRS:         service.NewSRS(repo, repo),
 	})
 
 	e := server.New(cfg, h, auth)

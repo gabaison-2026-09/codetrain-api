@@ -35,6 +35,11 @@ func (f fakeSkills) List(ctx context.Context) ([]domain.Skill, error) { return f
 type fakeUsers struct {
 	me     func(ctx context.Context, externalID string) (service.UserWithProgress, error)
 	create func(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
+	update func(
+		ctx context.Context,
+		externalID string,
+		patch service.UserPatch,
+	) (domain.User, error)
 }
 
 func (f fakeUsers) Me(ctx context.Context, externalID string) (service.UserWithProgress, error) {
@@ -43,6 +48,14 @@ func (f fakeUsers) Me(ctx context.Context, externalID string) (service.UserWithP
 
 func (f fakeUsers) Create(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error) {
 	return f.create(ctx, externalID, in)
+}
+
+func (f fakeUsers) Update(
+	ctx context.Context,
+	externalID string,
+	patch service.UserPatch,
+) (domain.User, error) {
+	return f.update(ctx, externalID, patch)
 }
 
 // serve はハンドラを1回呼び、Echo のエラーハンドラを通したうえで結果を返す。
@@ -78,6 +91,60 @@ func serveBody(t *testing.T, h echo.HandlerFunc, method, path, sub, body string)
 	if err := h(c); err != nil {
 		e.HTTPErrorHandler(err, c)
 	}
+	return rec
+}
+
+// serveWithParam はパスパラメータ付きでハンドラを1回呼ぶ。
+// paramName は ":id" のコロン無し部分（"id"）、paramValue はその値。
+func serveWithParam(t *testing.T, h echo.HandlerFunc, method, routePath, paramValue, sub string) *httptest.ResponseRecorder {
+	t.Helper()
+	e := echo.New()
+	e.HTTPErrorHandler = apperr.HTTPErrorHandler
+
+	req := httptest.NewRequest(method, strings.Replace(routePath, ":id", paramValue, 1), nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetPath(routePath)
+	c.SetParamNames("id")
+	c.SetParamValues(paramValue)
+	if sub != "" {
+		c.Set(middleware.SubjectKey, sub)
+	}
+
+	if err := h(c); err != nil {
+		e.HTTPErrorHandler(err, c)
+	}
+	return rec
+}
+
+// serveJSON はJSONボディ付きでハンドラを1回呼び、結果を返す。
+func serveJSON(
+	t *testing.T,
+	h echo.HandlerFunc,
+	method string,
+	path string,
+	sub string,
+	body string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	e := echo.New()
+	e.HTTPErrorHandler = apperr.HTTPErrorHandler
+
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if sub != "" {
+		c.Set(middleware.SubjectKey, sub)
+	}
+
+	if err := h(c); err != nil {
+		e.HTTPErrorHandler(err, c)
+	}
+
 	return rec
 }
 
@@ -168,7 +235,12 @@ func TestListSkills(t *testing.T) {
 //	認証済みでなければ 401、ユーザーがいなければ 404、それ以外の失敗は 500。
 func TestMe(t *testing.T) {
 	okUser := service.UserWithProgress{
-		User:     domain.User{ID: "u1", ExternalID: "seed-user-01", DisplayName: "テスト"},
+		User: domain.User{
+			ID:          "u1",
+			ExternalID:  "seed-user-01",
+			DisplayName: "テスト",
+			AvatarURL:   "https://example.com/avatar.jpg",
+		},
 		Progress: domain.Progress{XP: 120},
 	}
 
@@ -254,6 +326,13 @@ func TestMe(t *testing.T) {
 			}
 			if body.User.ExternalID != "seed-user-01" || body.Progress.XP != 120 {
 				t.Errorf("body = %+v, want %+v", body, okUser)
+			}
+			if body.User.AvatarURL != "https://example.com/avatar.jpg" {
+				t.Errorf(
+					"body.User.AvatarURL = %q, want %q",
+					body.User.AvatarURL,
+					"https://example.com/avatar.jpg",
+				)
 			}
 		})
 	}
@@ -392,4 +471,381 @@ func TestCreateMe(t *testing.T) {
 			}
 		})
 	}
+	}
+
+func TestUpdateMe(t *testing.T) {
+	t.Run("display_nameだけを更新する", func(t *testing.T) {
+		var gotExternalID string
+		var gotPatch service.UserPatch
+
+		h := New(Deps{Users: fakeUsers{
+			update: func(
+				_ context.Context,
+				externalID string,
+				patch service.UserPatch,
+			) (domain.User, error) {
+				gotExternalID = externalID
+				gotPatch = patch
+
+				return domain.User{
+					ID:          "u1",
+					ExternalID:  externalID,
+					DisplayName: *patch.DisplayName,
+					AvatarURL:   "https://example.com/current.jpg",
+				}, nil
+			},
+		}})
+
+		rec := serveJSON(
+			t,
+			h.UpdateMe,
+			http.MethodPatch,
+			"/v1/me",
+			"seed-user-01",
+			`{"display_name":"変更後"}`,
+		)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf(
+				"status = %d, want %d (body=%s)",
+				rec.Code,
+				http.StatusOK,
+				rec.Body.String(),
+			)
+		}
+
+		if gotExternalID != "seed-user-01" {
+			t.Errorf(
+				"externalID = %q, want %q",
+				gotExternalID,
+				"seed-user-01",
+			)
+		}
+		if gotPatch.DisplayName == nil || *gotPatch.DisplayName != "変更後" {
+			t.Errorf(
+				"DisplayName = %v, want %q",
+				gotPatch.DisplayName,
+				"変更後",
+			)
+		}
+		if gotPatch.AvatarURL != nil {
+			t.Errorf("AvatarURL = %v, want nil", gotPatch.AvatarURL)
+		}
+
+		var body domain.User
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf(
+				"レスポンスの解析に失敗: %v (body=%s)",
+				err,
+				rec.Body.String(),
+			)
+		}
+		if body.DisplayName != "変更後" {
+			t.Errorf(
+				"body.DisplayName = %q, want %q",
+				body.DisplayName,
+				"変更後",
+			)
+		}
+	})
+
+	t.Run("avatar_urlだけを更新する", func(t *testing.T) {
+		var gotPatch service.UserPatch
+
+		h := New(Deps{Users: fakeUsers{
+			update: func(
+				_ context.Context,
+				externalID string,
+				patch service.UserPatch,
+			) (domain.User, error) {
+				gotPatch = patch
+
+				return domain.User{
+					ID:          "u1",
+					ExternalID:  externalID,
+					DisplayName: "現在の名前",
+					AvatarURL:   *patch.AvatarURL,
+				}, nil
+			},
+		}})
+
+		rec := serveJSON(
+			t,
+			h.UpdateMe,
+			http.MethodPatch,
+			"/v1/me",
+			"seed-user-01",
+			`{"avatar_url":"https://example.com/new-avatar.jpg"}`,
+		)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf(
+				"status = %d, want %d (body=%s)",
+				rec.Code,
+				http.StatusOK,
+				rec.Body.String(),
+			)
+		}
+
+		if gotPatch.DisplayName != nil {
+			t.Errorf("DisplayName = %v, want nil", gotPatch.DisplayName)
+		}
+		if gotPatch.AvatarURL == nil ||
+			*gotPatch.AvatarURL != "https://example.com/new-avatar.jpg" {
+			t.Errorf(
+				"AvatarURL = %v, want %q",
+				gotPatch.AvatarURL,
+				"https://example.com/new-avatar.jpg",
+			)
+		}
+
+		var body domain.User
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf(
+				"レスポンスの解析に失敗: %v (body=%s)",
+				err,
+				rec.Body.String(),
+			)
+		}
+		if body.AvatarURL != "https://example.com/new-avatar.jpg" {
+			t.Errorf(
+				"body.AvatarURL = %q, want %q",
+				body.AvatarURL,
+				"https://example.com/new-avatar.jpg",
+			)
+		}
+	})
+
+	t.Run("空オブジェクトを受け付ける", func(t *testing.T) {
+		var gotPatch service.UserPatch
+
+		h := New(Deps{Users: fakeUsers{
+			update: func(
+				_ context.Context,
+				externalID string,
+				patch service.UserPatch,
+			) (domain.User, error) {
+				gotPatch = patch
+				return domain.User{
+					ID:          "u1",
+					ExternalID:  externalID,
+					DisplayName: "現在の名前",
+				}, nil
+			},
+		}})
+
+		rec := serveJSON(
+			t,
+			h.UpdateMe,
+			http.MethodPatch,
+			"/v1/me",
+			"seed-user-01",
+			`{}`,
+		)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf(
+				"status = %d, want %d (body=%s)",
+				rec.Code,
+				http.StatusOK,
+				rec.Body.String(),
+			)
+		}
+		if gotPatch.DisplayName != nil {
+			t.Errorf("DisplayName = %v, want nil", gotPatch.DisplayName)
+		}
+		if gotPatch.AvatarURL != nil {
+			t.Errorf("AvatarURL = %v, want nil", gotPatch.AvatarURL)
+		}
+	})
+
+	t.Run("不正なリクエストはVALIDATION_ERRORを返す", func(t *testing.T) {
+		tests := []struct {
+			name string
+			body string
+		}{
+			{
+				name: "display_nameが空文字",
+				body: `{"display_name":""}`,
+			},
+			{
+				name: "avatar_urlがURL形式ではない",
+				body: `{"avatar_url":"not-a-url"}`,
+			},
+			{
+				name: "JSONが壊れている",
+				body: `{"display_name":`,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				updateCalled := false
+
+				h := New(Deps{Users: fakeUsers{
+					update: func(
+						context.Context,
+						string,
+						service.UserPatch,
+					) (domain.User, error) {
+						updateCalled = true
+						return domain.User{}, nil
+					},
+				}})
+
+				rec := serveJSON(
+					t,
+					h.UpdateMe,
+					http.MethodPatch,
+					"/v1/me",
+					"seed-user-01",
+					tt.body,
+				)
+
+				if rec.Code != http.StatusBadRequest {
+					t.Fatalf(
+						"status = %d, want %d (body=%s)",
+						rec.Code,
+						http.StatusBadRequest,
+						rec.Body.String(),
+					)
+				}
+
+				var env struct {
+					Error struct {
+						Code string `json:"code"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+					t.Fatalf(
+						"エラーレスポンスの解析に失敗: %v (body=%s)",
+						err,
+						rec.Body.String(),
+					)
+				}
+				if env.Error.Code != apperr.CodeValidationError {
+					t.Errorf(
+						"error.code = %q, want %q",
+						env.Error.Code,
+						apperr.CodeValidationError,
+					)
+				}
+				if updateCalled {
+					t.Error("不正なリクエストでUpdateが呼ばれた")
+				}
+			})
+		}
+	})
+
+	t.Run("serviceエラーをHTTPエラーへ変換する", func(t *testing.T) {
+		tests := []struct {
+			name       string
+			sub        string
+			update     func() (domain.User, error)
+			wantStatus int
+			wantCode   string
+			wantCalled bool
+		}{
+			{
+				name: "認証情報がなければ401",
+				sub:  "",
+				update: func() (domain.User, error) {
+					return domain.User{}, nil
+				},
+				wantStatus: http.StatusUnauthorized,
+				wantCode:   apperr.CodeUnauthorized,
+				wantCalled: false,
+			},
+			{
+				name: "ユーザーが存在しなければ404",
+				sub:  "no-such-user",
+				update: func() (domain.User, error) {
+					return domain.User{}, service.ErrUserNotFound
+				},
+				wantStatus: http.StatusNotFound,
+				wantCode:   apperr.CodeUserNotFound,
+				wantCalled: true,
+			},
+			{
+				name: "その他のエラーなら500",
+				sub:  "seed-user-01",
+				update: func() (domain.User, error) {
+					return domain.User{}, errors.New("DB障害")
+				},
+				wantStatus: http.StatusInternalServerError,
+				wantCode:   apperr.CodeInternalError,
+				wantCalled: true,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				updateCalled := false
+
+				h := New(Deps{Users: fakeUsers{
+					update: func(
+						context.Context,
+						string,
+						service.UserPatch,
+					) (domain.User, error) {
+						updateCalled = true
+						return tt.update()
+					},
+				}})
+
+				rec := serveJSON(
+					t,
+					h.UpdateMe,
+					http.MethodPatch,
+					"/v1/me",
+					tt.sub,
+					`{}`,
+				)
+
+				if rec.Code != tt.wantStatus {
+					t.Fatalf(
+						"status = %d, want %d (body=%s)",
+						rec.Code,
+						tt.wantStatus,
+						rec.Body.String(),
+					)
+				}
+
+				var env struct {
+					Error struct {
+						Code    string `json:"code"`
+						Message string `json:"message"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+					t.Fatalf(
+						"エラーレスポンスの解析に失敗: %v (body=%s)",
+						err,
+						rec.Body.String(),
+					)
+				}
+				if env.Error.Code != tt.wantCode {
+					t.Errorf(
+						"error.code = %q, want %q",
+						env.Error.Code,
+						tt.wantCode,
+					)
+				}
+				if updateCalled != tt.wantCalled {
+					t.Errorf(
+						"Updateの呼び出し = %v, want %v",
+						updateCalled,
+						tt.wantCalled,
+					)
+				}
+				if tt.wantStatus == http.StatusInternalServerError &&
+					strings.Contains(env.Error.Message, "DB障害") {
+					t.Errorf(
+						"500レスポンスに原因が漏れている: %q",
+						env.Error.Message,
+					)
+				}
+			})
+		}
+	})
 }
