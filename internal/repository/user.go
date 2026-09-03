@@ -16,17 +16,18 @@ func (p *Postgres) FindUserByExternalID(ctx context.Context, externalID string) 
 	var user domain.User
 	var progress domain.Progress
 	var email *string
+	var avatarURL *string
 	var lastStudied *string
 
 	err := p.pool.QueryRow(ctx, `
-		SELECT u.id, u.external_id, u.display_name, u.email, u.created_at,
+		SELECT u.id, u.external_id, u.display_name, u.email, u.avatar_url, u.created_at,
 		       COALESCE(p.xp, 0), COALESCE(p.level, 1), COALESCE(p.streak_days, 0),
 		       to_char(p.last_studied_on, 'YYYY-MM-DD'),
 		       COALESCE(p.hearts, 0), p.current_skill_node_id
 		  FROM app_user u
 		  LEFT JOIN user_progress p ON p.user_id = u.id
 		 WHERE u.external_id = $1`, externalID).
-		Scan(&user.ID, &user.ExternalID, &user.DisplayName, &email, &user.CreatedAt,
+		Scan(&user.ID, &user.ExternalID, &user.DisplayName, &email, &avatarURL, &user.CreatedAt,
 			&progress.XP, &progress.Level, &progress.StreakDays, &lastStudied,
 			&progress.Hearts, &progress.CurrentSkillNodeID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -38,6 +39,9 @@ func (p *Postgres) FindUserByExternalID(ctx context.Context, externalID string) 
 
 	if email != nil {
 		user.Email = *email
+	}
+	if avatarURL != nil {
+    	user.AvatarURL = *avatarURL
 	}
 	progress.LastStudiedOn = lastStudied
 	return user, progress, nil
