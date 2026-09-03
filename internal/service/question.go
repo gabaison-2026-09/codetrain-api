@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
 
 	"github.com/gabaison-2026-09/codetrain-api/internal/apperr"
 	"github.com/gabaison-2026-09/codetrain-api/internal/paging"
+	"github.com/gabaison-2026-09/codetrain-api/internal/repository"
 )
 
 // questionCursor は created_at DESC, id DESC の並び替えキー。
@@ -24,6 +26,47 @@ type Question struct {
 
 func NewQuestion(users UserRepository, questions QuestionRepository) *Question {
 	return &Question{userResolver: userResolver{repo: users}, questions: questions}
+}
+
+// GetForUser は published 問題を1件返す。
+// answered=false なら correct_keys / explanation を null にして返す。
+// 未登録ユーザーは ErrUserNotFound、該当問題がなければ ErrQuestionNotFound。
+func (s *Question) GetForUser(ctx context.Context, externalID, questionID string) (domain.QuestionDetail, error) {
+	userID, err := s.resolveUserID(ctx, externalID)
+	if err != nil {
+		return domain.QuestionDetail{}, err
+	}
+
+	q, answered, err := s.questions.FindPublishedByID(ctx, userID, questionID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return domain.QuestionDetail{}, ErrQuestionNotFound
+	}
+	if err != nil {
+		return domain.QuestionDetail{}, err
+	}
+
+	detail := domain.QuestionDetail{
+		ID:           q.ID,
+		SkillNodeID:  q.SkillNodeID,
+		Type:         q.Type,
+		Difficulty:   q.Difficulty,
+		Title:        q.Title,
+		Body:         q.Body,
+		Code:         q.Code,
+		CodeLanguage: q.CodeLanguage,
+		Choices:      q.Choices,
+		Tags:         q.Tags,
+		Attribution:  q.Attribution,
+		Answered:     answered,
+	}
+
+	if answered {
+		detail.CorrectKeys = &q.CorrectKeys
+		detail.Explanation = &q.Explanation
+	}
+	// answered=false の場合 CorrectKeys / Explanation は nil → JSON null
+
+	return detail, nil
 }
 
 // List は published 問題を条件検索して1頁返す。

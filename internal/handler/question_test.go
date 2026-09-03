@@ -15,11 +15,16 @@ import (
 )
 
 type fakeQuestions struct {
-	list func(ctx context.Context, externalID string, params service.QuestionSearchParams) (service.QuestionList, error)
+	list       func(ctx context.Context, externalID string, params service.QuestionSearchParams) (service.QuestionList, error)
+	getForUser func(ctx context.Context, externalID, questionID string) (domain.QuestionDetail, error)
 }
 
 func (f fakeQuestions) List(ctx context.Context, externalID string, params service.QuestionSearchParams) (service.QuestionList, error) {
 	return f.list(ctx, externalID, params)
+}
+
+func (f fakeQuestions) GetForUser(ctx context.Context, externalID, questionID string) (domain.QuestionDetail, error) {
+	return f.getForUser(ctx, externalID, questionID)
 }
 
 func TestListQuestions(t *testing.T) {
@@ -234,6 +239,177 @@ func TestListQuestions(t *testing.T) {
 			}
 			if env.Error.Message == "" {
 				t.Error("error.message が空")
+			}
+			if tt.wantStatus == http.StatusInternalServerError && strings.Contains(rec.Body.String(), "DB 障害") {
+				t.Errorf("500 応答に原因文字列が漏れている: %s", rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestGetQuestion(t *testing.T) {
+	explanation := "map は各要素に関数を適用した新配列を返す"
+	correctKeys := []string{"b"}
+	answeredDetail := domain.QuestionDetail{
+		ID:          "q1",
+		Type:        domain.QuestionTypeCodeReading,
+		Difficulty:  2,
+		Title:       "配列メソッドの挙動",
+		Body:        "次のコードの出力は？",
+		Choices:     []domain.Choice{{Key: "a", Text: "[1,2,3]"}, {Key: "b", Text: "[2,4,6]"}},
+		Tags:        []string{"array"},
+		Answered:    true,
+		CorrectKeys: &correctKeys,
+		Explanation: &explanation,
+	}
+	unansweredDetail := domain.QuestionDetail{
+		ID:         "q1",
+		Type:       domain.QuestionTypeCodeReading,
+		Difficulty: 2,
+		Title:      "配列メソッドの挙動",
+		Body:       "次のコードの出力は？",
+		Choices:    []domain.Choice{{Key: "a", Text: "[1,2,3]"}, {Key: "b", Text: "[2,4,6]"}},
+		Tags:       []string{"array"},
+		Answered:   false,
+	}
+
+	testQID := "d0000000-0000-0000-0000-000000000001"
+
+	t.Run("未回答の問題で correct_keys/explanation が null", func(t *testing.T) {
+		h := New(Deps{Questions: fakeQuestions{
+			getForUser: func(_ context.Context, sub, qID string) (domain.QuestionDetail, error) {
+				if sub != "seed-user-01" || qID != testQID {
+					t.Errorf("args = (%q, %q)", sub, qID)
+				}
+				return unansweredDetail, nil
+			},
+		}})
+		rec := serveWithParam(t, h.GetQuestion, http.MethodGet, "/v1/questions/:id", testQID, "seed-user-01")
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var raw map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+			t.Fatalf("解析: %v", err)
+		}
+		if raw["answered"] != false {
+			t.Errorf("answered = %v, want false", raw["answered"])
+		}
+		if raw["correct_keys"] != nil {
+			t.Errorf("correct_keys = %v, want null", raw["correct_keys"])
+		}
+		if raw["explanation"] != nil {
+			t.Errorf("explanation = %v, want null", raw["explanation"])
+		}
+		if raw["body"] == nil {
+			t.Error("body が含まれていない")
+		}
+		if raw["choices"] == nil {
+			t.Error("choices が含まれていない")
+		}
+	})
+
+	t.Run("回答済みの問題で correct_keys/explanation が入る", func(t *testing.T) {
+		h := New(Deps{Questions: fakeQuestions{
+			getForUser: func(context.Context, string, string) (domain.QuestionDetail, error) {
+				return answeredDetail, nil
+			},
+		}})
+		rec := serveWithParam(t, h.GetQuestion, http.MethodGet, "/v1/questions/:id", testQID, "seed-user-01")
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d (body=%s)", rec.Code, rec.Body.String())
+		}
+		var raw map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+			t.Fatalf("解析: %v", err)
+		}
+		if raw["answered"] != true {
+			t.Errorf("answered = %v, want true", raw["answered"])
+		}
+		ck, ok := raw["correct_keys"].([]any)
+		if !ok || len(ck) != 1 || ck[0] != "b" {
+			t.Errorf("correct_keys = %v, want [b]", raw["correct_keys"])
+		}
+		if raw["explanation"] != explanation {
+			t.Errorf("explanation = %v, want %q", raw["explanation"], explanation)
+		}
+	})
+
+	errTests := []struct {
+		name       string
+		sub        string
+		paramID    string
+		getForUser func(ctx context.Context, externalID, questionID string) (domain.QuestionDetail, error)
+		wantStatus int
+		wantCode   string
+	}{
+		{
+			name:       "sub が無ければ 401",
+			sub:        "",
+			paramID:    "a0000000-0000-0000-0000-000000000001",
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   apperr.CodeUnauthorized,
+		},
+		{
+			name:       "id が uuid でなければ 400",
+			sub:        "seed-user-01",
+			paramID:    "not-a-uuid",
+			wantStatus: http.StatusBadRequest,
+			wantCode:   apperr.CodeValidationError,
+		},
+		{
+			name:    "ユーザーが無ければ 404 USER_NOT_FOUND",
+			sub:     "no-such-user",
+			paramID: "a0000000-0000-0000-0000-000000000001",
+			getForUser: func(context.Context, string, string) (domain.QuestionDetail, error) {
+				return domain.QuestionDetail{}, service.ErrUserNotFound
+			},
+			wantStatus: http.StatusNotFound,
+			wantCode:   apperr.CodeUserNotFound,
+		},
+		{
+			name:    "問題が無ければ 404 QUESTION_NOT_FOUND",
+			sub:     "seed-user-01",
+			paramID: "a0000000-0000-0000-0000-000000000001",
+			getForUser: func(context.Context, string, string) (domain.QuestionDetail, error) {
+				return domain.QuestionDetail{}, service.ErrQuestionNotFound
+			},
+			wantStatus: http.StatusNotFound,
+			wantCode:   apperr.CodeQuestionNotFound,
+		},
+		{
+			name:    "その他の失敗は 500",
+			sub:     "seed-user-01",
+			paramID: "a0000000-0000-0000-0000-000000000001",
+			getForUser: func(context.Context, string, string) (domain.QuestionDetail, error) {
+				return domain.QuestionDetail{}, errors.New("DB 障害")
+			},
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   apperr.CodeInternalError,
+		},
+	}
+
+	for _, tt := range errTests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := New(Deps{Questions: fakeQuestions{getForUser: tt.getForUser}})
+			rec := serveWithParam(t, h.GetQuestion, http.MethodGet, "/v1/questions/:id", tt.paramID, tt.sub)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d (body=%s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			var env struct {
+				Error struct {
+					Code    string `json:"code"`
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+				t.Fatalf("エンベロープ解析: %v (body=%s)", err, rec.Body.String())
+			}
+			if env.Error.Code != tt.wantCode {
+				t.Errorf("error.code = %q, want %q", env.Error.Code, tt.wantCode)
 			}
 			if tt.wantStatus == http.StatusInternalServerError && strings.Contains(rec.Body.String(), "DB 障害") {
 				t.Errorf("500 応答に原因文字列が漏れている: %s", rec.Body.String())

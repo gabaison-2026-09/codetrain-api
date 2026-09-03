@@ -81,6 +81,29 @@ func serveBody(t *testing.T, h echo.HandlerFunc, method, path, sub, body string)
 	return rec
 }
 
+// serveWithParam はパスパラメータ付きでハンドラを1回呼ぶ。
+// paramName は ":id" のコロン無し部分（"id"）、paramValue はその値。
+func serveWithParam(t *testing.T, h echo.HandlerFunc, method, routePath, paramValue, sub string) *httptest.ResponseRecorder {
+	t.Helper()
+	e := echo.New()
+	e.HTTPErrorHandler = apperr.HTTPErrorHandler
+
+	req := httptest.NewRequest(method, strings.Replace(routePath, ":id", paramValue, 1), nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetPath(routePath)
+	c.SetParamNames("id")
+	c.SetParamValues(paramValue)
+	if sub != "" {
+		c.Set(middleware.SubjectKey, sub)
+	}
+
+	if err := h(c); err != nil {
+		e.HTTPErrorHandler(err, c)
+	}
+	return rec
+}
+
 // Health の契約: DB に到達できれば 200 と db:"ok"、できなければ 503 と db:"error"。
 func TestHealth(t *testing.T) {
 	tests := []struct {

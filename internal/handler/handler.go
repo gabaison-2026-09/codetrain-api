@@ -31,6 +31,7 @@ type UserFinder interface {
 
 type QuestionLister interface {
 	List(ctx context.Context, externalID string, params service.QuestionSearchParams) (service.QuestionList, error)
+	GetForUser(ctx context.Context, externalID, questionID string) (domain.QuestionDetail, error)
 }
 
 type Handler struct {

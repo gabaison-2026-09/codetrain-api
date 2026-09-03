@@ -31,7 +31,10 @@ type UserRepository interface {
 	InsertUser(ctx context.Context, externalID, displayName string, avatarURL *string) (domain.User, domain.Progress, error)
 }
 
-// QuestionRepository は published 問題の検索。行を返すだけで、ページングは service が行う。
+// QuestionRepository は published 問題の検索・取得。行を返すだけで、ページングは service が行う。
 type QuestionRepository interface {
 	SearchQuestions(ctx context.Context, userID string, q domain.QuestionSearch) ([]domain.QuestionSummary, error)
+	// FindPublishedByID は status=published の問題を1件返す。answered は
+	// 当該ユーザーの attempt が存在するかどうか。該当行がなければ repository.ErrNotFound。
+	FindPublishedByID(ctx context.Context, userID, questionID string) (domain.Question, bool, error)
 }
