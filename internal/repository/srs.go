@@ -16,7 +16,7 @@ SELECT q.id, q.type, q.difficulty, q.title, COALESCE(q.code_language, ''),
   FROM srs_state s
   JOIN question q ON q.id = s.question_id
  WHERE s.user_id = $1
-   AND s.due_on <= CURRENT_DATE
+   AND s.due_on <= `+jstToday+`
    AND q.status = 'published'
  ORDER BY s.due_on ASC, q.id
  LIMIT $2`, userID, limit)

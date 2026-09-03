@@ -24,6 +24,10 @@ var ErrNotFound = errors.New("not found")
 // service 層がこれを受けて、ユースケースごとのエラーに翻訳する。
 var ErrAlreadyExists = errors.New("already exists")
 
+// jstToday は SQL 中で JST 基準の「今日」を得る式。
+// DB の timezone 設定に依存せず、日付境界を Asia/Tokyo に固定する。
+const jstToday = "(now() AT TIME ZONE 'Asia/Tokyo')::date"
+
 // Postgres は pgx のコネクションプールを保持する。
 type Postgres struct {
 	pool *pgxpool.Pool

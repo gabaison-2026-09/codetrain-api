@@ -28,7 +28,7 @@ func (p *Postgres) PickUnansweredPublished(ctx context.Context, userID string, t
 
 func (p *Postgres) UpsertDailyTask(ctx context.Context, userID string, slot domain.TaskConfig, questionID string) error {
 	_, err := p.pool.Exec(ctx, `INSERT INTO daily_task(user_id,activity_date,slot_no,question_type,language,difficulty,question_id)
-		VALUES($1,CURRENT_DATE,$2,$3,$4,$5,$6) ON CONFLICT(user_id,activity_date,slot_no) DO NOTHING`,
+		VALUES($1,`+jstToday+`,$2,$3,$4,$5,$6) ON CONFLICT(user_id,activity_date,slot_no) DO NOTHING`,
 		userID, slot.SlotNo, slot.QuestionType, slot.Language, slot.Difficulty, questionID)
 	return err
 }
@@ -37,7 +37,7 @@ func (p *Postgres) GetTodayHome(ctx context.Context, userID string) ([]domain.Ho
 	rows, err := p.pool.Query(ctx, `SELECT d.id,d.activity_date::text,d.slot_no,d.question_type,d.language,d.difficulty,d.question_id,d.completed_at,
 		q.id,q.type,q.difficulty,q.title,q.body,COALESCE(q.code,''),COALESCE(q.code_language,''),q.choices
 		FROM daily_task d JOIN question q ON q.id=d.question_id
-		WHERE d.user_id=$1 AND d.activity_date=CURRENT_DATE ORDER BY d.slot_no`, userID)
+		WHERE d.user_id=$1 AND d.activity_date=`+jstToday+` ORDER BY d.slot_no`, userID)
 	if err != nil {
 		return nil, err
 	}
