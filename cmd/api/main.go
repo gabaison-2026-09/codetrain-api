@@ -62,6 +62,7 @@ func run() error {
 		SRS:         service.NewSRS(repo, repo),
 		Calendar:    service.NewCalendar(repo, repo),
 		Attempts:    service.NewAttempt(repo, repo, repo),
+		Home:        service.NewHome(repo, repo),
 	})
 
 	e := server.New(cfg, h, auth)
