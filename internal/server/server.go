@@ -53,6 +53,7 @@ func New(cfg config.Config, h *handler.Handler, auth echo.MiddlewareFunc) *echo.
 	v1.DELETE("/task-slots/:slot_no", h.DeleteTaskSlot, auth) // 認証必須
 	v1.GET("/questions", h.ListQuestions, auth)               // 認証必須
 	v1.GET("/questions/:id", h.GetQuestion, auth)             // 認証必須
+	v1.POST("/questions/:id/attempts", h.SubmitAttempt, auth) // 認証必須
 	v1.GET("/srs/due", h.SRSDue, auth)                        // 認証必須
 	v1.PATCH("/me", h.UpdateMe, auth)                         // 認証必須
 	v1.GET("/task-slots", h.ListTaskSlots, auth)              // 認証必須
