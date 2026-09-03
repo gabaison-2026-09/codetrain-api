@@ -41,7 +41,7 @@ func (p *Postgres) FindUserByExternalID(ctx context.Context, externalID string) 
 		user.Email = *email
 	}
 	if avatarURL != nil {
-    	user.AvatarURL = *avatarURL
+		user.AvatarURL = *avatarURL
 	}
 	progress.LastStudiedOn = lastStudied
 	return user, progress, nil
