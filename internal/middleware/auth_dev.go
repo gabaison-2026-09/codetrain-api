@@ -20,11 +20,13 @@ import (
 //	curl -H "X-Dev-User: seed-user-01" http://localhost:8080/v1/me
 const devUserHeader = "X-Dev-User"
 
+const devEmailHeader = "X-Dev-Email"
+
 // ExtraCORSHeaders は dev モードで追加する CORS 許可ヘッダを返す。
 // admin（ブラウザ）から X-Dev-User を付けて API を叩けるようにするためのもので、
 // この文字列自体も本番バイナリに残さない。
 func ExtraCORSHeaders() []string {
-	return []string{devUserHeader}
+	return []string{devUserHeader, devEmailHeader}
 }
 
 func newDevAuth(_ config.Config) (echo.MiddlewareFunc, error) {
@@ -38,6 +40,9 @@ func newDevAuth(_ config.Config) (echo.MiddlewareFunc, error) {
 				return ErrUnauthorized
 			}
 			setSubject(c, sub)
+			if email := c.Request().Header.Get(devEmailHeader); email != "" {
+				setEmail(c, email)
+			}
 			return next(c)
 		}
 	}, nil

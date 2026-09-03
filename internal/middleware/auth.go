@@ -25,6 +25,9 @@ import (
 // 公開しているのは、handler のテストが認証済みのコンテキストを組み立てられるようにするため。
 const SubjectKey = "codetrain.subject"
 
+// EmailKey は認証トークンから取得した email を Echo のコンテキストに置くときのキー。
+const EmailKey = "codetrain.email"
+
 // ErrUnauthorized は認証に失敗したことを表す。
 var ErrUnauthorized = echo.NewHTTPError(http.StatusUnauthorized, "認証が必要です")
 
@@ -34,8 +37,19 @@ func Subject(c echo.Context) (string, bool) {
 	return v, ok && v != ""
 }
 
+// Email は認証トークンから取得した email を返す。
+// トークンに email が含まれない場合は空文字と false を返す。
+func Email(c echo.Context) (string, bool) {
+	v, ok := c.Get(EmailKey).(string)
+	return v, ok && v != ""
+}
+
 func setSubject(c echo.Context, sub string) {
 	c.Set(SubjectKey, sub)
+}
+
+func setEmail(c echo.Context, email string) {
+	c.Set(EmailKey, email)
 }
 
 // NewAuth は AUTH_MODE に応じた認証ミドルウェアを返す。

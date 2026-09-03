@@ -33,7 +33,7 @@ type fakeSkills struct {
 func (f fakeSkills) List(ctx context.Context) ([]domain.Skill, error) { return f.list(ctx) }
 
 type fakeUsers struct {
-	me     func(ctx context.Context, externalID string) (service.UserWithProgress, error)
+	me     func(ctx context.Context, externalID string, email string) (service.UserWithProgress, error)
 	create func(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
 	update func(
 		ctx context.Context,
@@ -42,8 +42,8 @@ type fakeUsers struct {
 	) (domain.User, error)
 }
 
-func (f fakeUsers) Me(ctx context.Context, externalID string) (service.UserWithProgress, error) {
-	return f.me(ctx, externalID)
+func (f fakeUsers) Me(ctx context.Context, externalID string, email string) (service.UserWithProgress, error) {
+	return f.me(ctx, externalID, email)
 }
 
 func (f fakeUsers) Create(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error) {
@@ -247,27 +247,27 @@ func TestMe(t *testing.T) {
 	tests := []struct {
 		name       string
 		sub        string
-		me         func(ctx context.Context, externalID string) (service.UserWithProgress, error)
+		me       func(ctx context.Context, externalID string, email string) (service.UserWithProgress, error)
 		wantStatus int
 		wantCode   string // 失敗時のエラーエンベロープ code。空なら検証しない。
 	}{
 		{
 			name:       "認証済みならユーザーを返す",
 			sub:        "seed-user-01",
-			me:         func(context.Context, string) (service.UserWithProgress, error) { return okUser, nil },
+			me:         func(context.Context, string, string) (service.UserWithProgress, error) { return okUser, nil },
 			wantStatus: http.StatusOK,
 		},
 		{
 			name:       "sub が無ければ 401",
 			sub:        "",
-			me:         func(context.Context, string) (service.UserWithProgress, error) { return okUser, nil },
+			me:         func(context.Context, string, string) (service.UserWithProgress, error) { return okUser, nil },
 			wantStatus: http.StatusUnauthorized,
 			wantCode:   apperr.CodeUnauthorized,
 		},
 		{
 			name: "ユーザーが無ければ 404",
 			sub:  "no-such-user",
-			me: func(context.Context, string) (service.UserWithProgress, error) {
+			me: func(context.Context, string, string) (service.UserWithProgress, error) {
 				return service.UserWithProgress{}, service.ErrUserNotFound
 			},
 			wantStatus: http.StatusNotFound,
@@ -276,7 +276,7 @@ func TestMe(t *testing.T) {
 		{
 			name: "その他の失敗は 500",
 			sub:  "seed-user-01",
-			me: func(context.Context, string) (service.UserWithProgress, error) {
+			me: func(context.Context, string, string) (service.UserWithProgress, error) {
 				return service.UserWithProgress{}, errors.New("DB 障害")
 			},
 			wantStatus: http.StatusInternalServerError,
@@ -343,7 +343,7 @@ func TestMe(t *testing.T) {
 func TestMeUsesSubjectAsExternalID(t *testing.T) {
 	var got string
 	h := New(Deps{Users: fakeUsers{
-		me: func(_ context.Context, externalID string) (service.UserWithProgress, error) {
+		me: func(_ context.Context, externalID string, _ string) (service.UserWithProgress, error) {
 			got = externalID
 			return service.UserWithProgress{}, nil
 		},
