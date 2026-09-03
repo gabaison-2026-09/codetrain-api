@@ -253,11 +253,16 @@ func TestTaskSlotSetSlot(t *testing.T) {
 }
 
 type fakeTaskSlotRepo struct {
-	list func(context.Context, string) ([]domain.TaskConfig, error)
+	list   func(context.Context, string) ([]domain.TaskConfig, error)
+	delete func(context.Context, string, int) error
 }
 
 func (f fakeTaskSlotRepo) ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error) {
 	return f.list(ctx, userID)
+}
+
+func (f fakeTaskSlotRepo) DeleteUserTask(ctx context.Context, userID string, slotNo int) error {
+	return f.delete(ctx, userID, slotNo)
 }
 
 func TestTaskSlotListSlots(t *testing.T) {
@@ -316,4 +321,91 @@ func TestTaskSlotListSlotsResolvesUserError(t *testing.T) {
 	if _, err := svc.ListSlots(context.Background(), "seed-user-01"); err == nil {
 		t.Fatal("expected error")
 	}
+}
+
+func TestTaskSlotDeleteSlot(t *testing.T) {
+	t.Run("ユーザーを解決して指定スロットを削除する", func(t *testing.T) {
+		var gotUserID string
+		var gotSlotNo int
+		svc := NewTaskSlot(fakeUserRepo{
+			find: func(_ context.Context, externalID string) (domain.User, domain.Progress, error) {
+				if externalID != "seed-user-01" {
+					t.Errorf("externalID = %q", externalID)
+				}
+				return domain.User{ID: "u1"}, domain.Progress{}, nil
+			},
+		}, fakeTaskSlotRepo{
+			delete: func(_ context.Context, userID string, slotNo int) error {
+				gotUserID = userID
+				gotSlotNo = slotNo
+				return nil
+			},
+		})
+
+		if err := svc.DeleteSlot(context.Background(), "seed-user-01", 3); err != nil {
+			t.Fatalf("DeleteSlot: %v", err)
+		}
+		if gotUserID != "u1" || gotSlotNo != 3 {
+			t.Errorf("DeleteUserTask(%q, %d), want (%q, %d)", gotUserID, gotSlotNo, "u1", 3)
+		}
+	})
+
+	t.Run("スロット番号が範囲外ならリポジトリを呼ばない", func(t *testing.T) {
+		svc := NewTaskSlot(fakeUserRepo{}, fakeTaskSlotRepo{})
+		for _, slotNo := range []int{0, 6} {
+			if err := svc.DeleteSlot(context.Background(), "seed-user-01", slotNo); !errors.Is(err, ErrTaskSlotNoInvalid) {
+				t.Errorf("slotNo = %d, err = %v, want %v", slotNo, err, ErrTaskSlotNoInvalid)
+			}
+		}
+	})
+
+	t.Run("未登録ユーザーなら削除しない", func(t *testing.T) {
+		svc := NewTaskSlot(fakeUserRepo{
+			find: func(context.Context, string) (domain.User, domain.Progress, error) {
+				return domain.User{}, domain.Progress{}, repository.ErrNotFound
+			},
+		}, fakeTaskSlotRepo{
+			delete: func(context.Context, string, int) error {
+				t.Fatal("DeleteUserTask が呼ばれた")
+				return nil
+			},
+		})
+
+		if err := svc.DeleteSlot(context.Background(), "no-such-user", 3); !errors.Is(err, ErrUserNotFound) {
+			t.Errorf("err = %v, want %v", err, ErrUserNotFound)
+		}
+	})
+
+	t.Run("削除対象が無ければスロット番号エラーに翻訳する", func(t *testing.T) {
+		svc := NewTaskSlot(fakeUserRepo{
+			find: func(context.Context, string) (domain.User, domain.Progress, error) {
+				return domain.User{ID: "u1"}, domain.Progress{}, nil
+			},
+		}, fakeTaskSlotRepo{
+			delete: func(context.Context, string, int) error { return repository.ErrNotFound },
+		})
+
+		err := svc.DeleteSlot(context.Background(), "seed-user-01", 3)
+		if !errors.Is(err, ErrTaskSlotNoInvalid) {
+			t.Errorf("err = %v, want %v", err, ErrTaskSlotNoInvalid)
+		}
+		if errors.Is(err, repository.ErrNotFound) {
+			t.Errorf("repository.ErrNotFound が service から漏れている: %v", err)
+		}
+	})
+
+	t.Run("削除エラーを伝播する", func(t *testing.T) {
+		wantErr := errors.New("DB 障害")
+		svc := NewTaskSlot(fakeUserRepo{
+			find: func(context.Context, string) (domain.User, domain.Progress, error) {
+				return domain.User{ID: "u1"}, domain.Progress{}, nil
+			},
+		}, fakeTaskSlotRepo{
+			delete: func(context.Context, string, int) error { return wantErr },
+		})
+
+		if err := svc.DeleteSlot(context.Background(), "seed-user-01", 3); !errors.Is(err, wantErr) {
+			t.Errorf("err = %v, want %v", err, wantErr)
+		}
+	})
 }

@@ -81,3 +81,19 @@ func (p *Postgres) UpsertUserTask(ctx context.Context, userID string, slot domai
 	).Scan(&saved.SlotNo, &saved.QuestionType, &saved.Language, &saved.Difficulty)
 	return saved, err
 }
+
+// DeleteUserTask はユーザーの指定されたタスクスロットを削除する。
+// 削除対象が存在しない場合は ErrNotFound を返す。
+func (p *Postgres) DeleteUserTask(ctx context.Context, userID string, slotNo int) error {
+	result, err := p.pool.Exec(ctx, `
+		DELETE FROM user_task
+		 WHERE user_id = $1
+		   AND slot_no = $2`, userID, slotNo)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

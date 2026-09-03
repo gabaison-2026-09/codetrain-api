@@ -233,11 +233,16 @@ func serveTaskSlot(t *testing.T, h echo.HandlerFunc, slotNo, sub, body string) *
 }
 
 type fakeTaskSlotLister struct {
-	list func(context.Context, string) ([]domain.TaskConfig, error)
+	list       func(context.Context, string) ([]domain.TaskConfig, error)
+	deleteSlot func(context.Context, string, int) error
 }
 
 func (f fakeTaskSlotLister) ListSlots(ctx context.Context, externalID string) ([]domain.TaskConfig, error) {
 	return f.list(ctx, externalID)
+}
+
+func (f fakeTaskSlotLister) DeleteSlot(ctx context.Context, externalID string, slotNo int) error {
+	return f.deleteSlot(ctx, externalID, slotNo)
 }
 
 func TestListTaskSlots(t *testing.T) {
@@ -316,4 +321,98 @@ func TestListTaskSlotsErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeleteTaskSlot(t *testing.T) {
+	t.Run("設定済みスロットを削除して 204", func(t *testing.T) {
+		called := false
+		h := New(Deps{TaskSlots: fakeTaskSlotLister{
+			deleteSlot: func(_ context.Context, externalID string, slotNo int) error {
+				called = true
+				if externalID != "seed-user-01" || slotNo != 3 {
+					t.Errorf("DeleteSlot(%q, %d)", externalID, slotNo)
+				}
+				return nil
+			},
+		}})
+
+		rec := serveDeleteTaskSlot(t, h.DeleteTaskSlot, "3", "seed-user-01")
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want 204 (body=%s)", rec.Code, rec.Body.String())
+		}
+		if !called {
+			t.Fatal("DeleteSlot が呼ばれていない")
+		}
+		if rec.Body.Len() != 0 {
+			t.Errorf("body = %q, want empty", rec.Body.String())
+		}
+	})
+
+	tests := []struct {
+		name       string
+		sub        string
+		slotNo     string
+		serviceErr error
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "認証なしは 401", slotNo: "3", wantStatus: http.StatusUnauthorized, wantCode: apperr.CodeUnauthorized},
+		{name: "slot_no 0 は 400", sub: "u", slotNo: "0", wantStatus: http.StatusBadRequest, wantCode: apperr.CodeTaskSlotNoInvalid},
+		{name: "slot_no 6 は 400", sub: "u", slotNo: "6", wantStatus: http.StatusBadRequest, wantCode: apperr.CodeTaskSlotNoInvalid},
+		{name: "slot_no が数値でなければ 400", sub: "u", slotNo: "x", wantStatus: http.StatusBadRequest, wantCode: apperr.CodeTaskSlotNoInvalid},
+		{name: "未登録ユーザーは 404", sub: "u", slotNo: "1", serviceErr: service.ErrUserNotFound, wantStatus: http.StatusNotFound, wantCode: apperr.CodeUserNotFound},
+		{name: "未設定スロットは 404", sub: "u", slotNo: "1", serviceErr: service.ErrTaskSlotNoInvalid, wantStatus: http.StatusNotFound, wantCode: apperr.CodeTaskSlotNoInvalid},
+		{name: "その他の失敗は 500", sub: "u", slotNo: "1", serviceErr: errors.New("DB 障害"), wantStatus: http.StatusInternalServerError, wantCode: apperr.CodeInternalError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			h := New(Deps{TaskSlots: fakeTaskSlotLister{
+				deleteSlot: func(context.Context, string, int) error {
+					called = true
+					return tt.serviceErr
+				},
+			}})
+
+			rec := serveDeleteTaskSlot(t, h.DeleteTaskSlot, tt.slotNo, tt.sub)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d (body=%s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if tt.serviceErr == nil && tt.wantStatus != http.StatusNoContent && called {
+				t.Error("入力エラー時に service が呼ばれた")
+			}
+
+			var env struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+				t.Fatalf("response: %v", err)
+			}
+			if env.Error.Code != tt.wantCode {
+				t.Errorf("error.code = %q, want %q", env.Error.Code, tt.wantCode)
+			}
+		})
+	}
+}
+
+func serveDeleteTaskSlot(t *testing.T, h echo.HandlerFunc, slotNo, sub string) *httptest.ResponseRecorder {
+	t.Helper()
+	e := echo.New()
+	e.HTTPErrorHandler = apperr.HTTPErrorHandler
+	req := httptest.NewRequest(http.MethodDelete, "/v1/task-slots/"+slotNo, nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetPath("/v1/task-slots/:slot_no")
+	c.SetParamNames("slot_no")
+	c.SetParamValues(slotNo)
+	if sub != "" {
+		c.Set(middleware.SubjectKey, sub)
+	}
+	if err := h(c); err != nil {
+		e.HTTPErrorHandler(err, c)
+	}
+	return rec
 }
