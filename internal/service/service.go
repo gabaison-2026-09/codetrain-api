@@ -74,3 +74,8 @@ type TaskOptionRepository interface {
 	OptionExists(ctx context.Context, questionType domain.QuestionType, language string, difficulty *int) (bool, error)
 	UpsertUserTask(ctx context.Context, userID string, slot domain.TaskConfig) (domain.TaskConfig, error)
 }
+
+type CalendarRepository interface {
+	DailyConsumption(ctx context.Context, userID string, from, to string) ([]domain.CalendarDay, error)
+	Streak(ctx context.Context, userID string) (int, *string, error)
+}
