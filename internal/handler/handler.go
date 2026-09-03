@@ -29,6 +29,11 @@ type SkillLister interface {
 
 type UserFinder interface {
 	Me(ctx context.Context, externalID string) (service.UserWithProgress, error)
+	Update(
+		ctx context.Context,
+		externalID string,
+		patch service.UserPatch,
+	) (domain.User, error)
 }
 
 type Handler struct {
