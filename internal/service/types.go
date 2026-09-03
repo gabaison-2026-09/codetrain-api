@@ -35,6 +35,24 @@ type QuestionList struct {
 	NextCursor *string                  `json:"next_cursor"`
 }
 
+// AdminQuestionSearchParams は GET /v1/admin/questions のクエリ。
+// Cursor は未デコードの文字列（空なら先頭頁）。
+type AdminQuestionSearchParams struct {
+	Status   domain.QuestionStatus
+	Type     domain.QuestionType
+	Language string
+	SkillID  string
+	Q        string
+	Cursor   string
+	Limit    int
+}
+
+// AdminQuestionList は管理者向け問題一覧のレスポンス。
+type AdminQuestionList struct {
+	Questions  []domain.AdminQuestionSummary `json:"questions"`
+	NextCursor *string                       `json:"next_cursor"`
+}
+
 // SubmitAttemptInput は回答送信の入力。DurationMS は未指定なら nil。
 type SubmitAttemptInput struct {
 	SelectedKeys []string

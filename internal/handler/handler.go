@@ -39,6 +39,10 @@ type QuestionLister interface {
 	GetForUser(ctx context.Context, externalID, questionID string) (domain.QuestionDetail, error)
 }
 
+type AdminQuestionLister interface {
+	List(ctx context.Context, params service.AdminQuestionSearchParams) (service.AdminQuestionList, error)
+}
+
 type AttemptSubmitter interface {
 	Submit(ctx context.Context, externalID, questionID string, in service.SubmitAttemptInput) (domain.AttemptResult, error)
 }
@@ -69,6 +73,7 @@ type Handler struct {
 	skills      SkillLister
 	users       UserFinder
 	questions   QuestionLister
+	admin       AdminQuestionLister
 	srs         SRSDueLister
 	taskSlots   TaskSlotLister
 	taskOptions TaskOptionLister
@@ -84,6 +89,7 @@ type Deps struct {
 	Skills      SkillLister
 	Users       UserFinder
 	Questions   QuestionLister
+	Admin       AdminQuestionLister
 	SRS         SRSDueLister
 	TaskSlots   TaskSlotLister
 	TaskOptions TaskOptionLister
@@ -98,6 +104,7 @@ func New(deps Deps) *Handler {
 		skills:      deps.Skills,
 		users:       deps.Users,
 		questions:   deps.Questions,
+		admin:       deps.Admin,
 		srs:         deps.SRS,
 		taskSlots:   deps.TaskSlots,
 		taskOptions: deps.TaskOptions,

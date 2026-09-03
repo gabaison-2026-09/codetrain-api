@@ -57,6 +57,11 @@ type QuestionRepository interface {
 	FindPublishedByID(ctx context.Context, userID, questionID string) (domain.Question, bool, error)
 }
 
+// AdminQuestionRepository は status を問わない管理者向け問題検索。
+type AdminQuestionRepository interface {
+	SearchAdminQuestions(ctx context.Context, params domain.AdminQuestionSearch) ([]domain.AdminQuestionSummary, error)
+}
+
 // AttemptRepository は回答と、それに伴う全ての進捗更新を1トランザクションで記録する。
 type AttemptRepository interface {
 	RecordAttempt(ctx context.Context, attempt domain.Attempt, question domain.Question, xpGained int) (domain.AttemptResult, error)

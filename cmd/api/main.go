@@ -59,6 +59,7 @@ func run() error {
 		TaskSlots:   service.NewTaskSlot(repo, repo),
 		TaskOptions: service.NewTaskOptions(repo),
 		Questions:   service.NewQuestion(repo, repo),
+		Admin:       service.NewAdminQuestion(repo),
 		SRS:         service.NewSRS(repo, repo),
 		Calendar:    service.NewCalendar(repo, repo),
 		Attempts:    service.NewAttempt(repo, repo, repo),
