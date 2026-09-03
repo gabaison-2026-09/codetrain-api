@@ -25,7 +25,8 @@ type SkillRepository interface {
 	ListSkillNodes(ctx context.Context) ([]domain.SkillNode, error)
 }
 
-// UserRepository はユーザーと進捗の取得。
+// UserRepository はユーザーと進捗の取得・作成。
 type UserRepository interface {
 	FindUserByExternalID(ctx context.Context, externalID string) (domain.User, domain.Progress, error)
+	InsertUser(ctx context.Context, externalID, displayName string, avatarURL *string) (domain.User, domain.Progress, error)
 }

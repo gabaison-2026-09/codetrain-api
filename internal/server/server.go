@@ -47,6 +47,7 @@ func New(cfg config.Config, h *handler.Handler, auth echo.MiddlewareFunc) *echo.
 	v1 := e.Group("/v1")
 	v1.GET("/skills", h.ListSkills) // 認証不要
 	v1.GET("/me", h.Me, auth)       // 認証必須
+	v1.POST("/me", h.CreateMe, auth) // 認証必須（JIT プロビジョニング）
 
 	return e
 }

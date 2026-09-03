@@ -20,6 +20,10 @@ import (
 // service 層がこれを受けて、ユースケースごとのエラーに翻訳する。
 var ErrNotFound = errors.New("not found")
 
+// ErrAlreadyExists は UNIQUE 制約違反など、既に同一キーの行があることを表す。
+// service 層がこれを受けて、ユースケースごとのエラーに翻訳する。
+var ErrAlreadyExists = errors.New("already exists")
+
 // Postgres は pgx のコネクションプールを保持する。
 type Postgres struct {
 	pool *pgxpool.Pool
