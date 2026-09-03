@@ -47,6 +47,10 @@ type AdminQuestionGetter interface {
 	Get(ctx context.Context, questionID string) (domain.AdminQuestion, error)
 }
 
+type AdminQuestionUpdater interface {
+	Update(ctx context.Context, questionID string, patch domain.AdminQuestionPatch) (domain.AdminQuestion, error)
+}
+
 type ReviewQueueLister interface {
 	List(ctx context.Context, params service.ReviewQueueParams) (service.ReviewQueueList, error)
 }
@@ -77,53 +81,56 @@ type HomeGetter interface {
 }
 
 type Handler struct {
-	health      HealthChecker
-	skills      SkillLister
-	users       UserFinder
-	questions   QuestionLister
-	admin       AdminQuestionLister
-	adminGetter AdminQuestionGetter
-	reviewQueue ReviewQueueLister
-	srs         SRSDueLister
-	taskSlots   TaskSlotLister
-	taskOptions TaskOptionLister
-	calendar    CalendarGetter
-	attempts    AttemptSubmitter
-	home        HomeGetter
+	health       HealthChecker
+	skills       SkillLister
+	users        UserFinder
+	questions    QuestionLister
+	admin        AdminQuestionLister
+	adminGetter  AdminQuestionGetter
+	adminUpdater AdminQuestionUpdater
+	reviewQueue  ReviewQueueLister
+	srs          SRSDueLister
+	taskSlots    TaskSlotLister
+	taskOptions  TaskOptionLister
+	calendar     CalendarGetter
+	attempts     AttemptSubmitter
+	home         HomeGetter
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
 // 足すだけで済み、既存の New 呼び出し（テスト含む）を壊さない。
 type Deps struct {
-	Health      HealthChecker
-	Skills      SkillLister
-	Users       UserFinder
-	Questions   QuestionLister
-	Admin       AdminQuestionLister
-	AdminGetter AdminQuestionGetter
-	ReviewQueue ReviewQueueLister
-	SRS         SRSDueLister
-	TaskSlots   TaskSlotLister
-	TaskOptions TaskOptionLister
-	Calendar    CalendarGetter
-	Attempts    AttemptSubmitter
-	Home        HomeGetter
+	Health       HealthChecker
+	Skills       SkillLister
+	Users        UserFinder
+	Questions    QuestionLister
+	Admin        AdminQuestionLister
+	AdminGetter  AdminQuestionGetter
+	AdminUpdater AdminQuestionUpdater
+	ReviewQueue  ReviewQueueLister
+	SRS          SRSDueLister
+	TaskSlots    TaskSlotLister
+	TaskOptions  TaskOptionLister
+	Calendar     CalendarGetter
+	Attempts     AttemptSubmitter
+	Home         HomeGetter
 }
 
 func New(deps Deps) *Handler {
 	return &Handler{
-		health:      deps.Health,
-		skills:      deps.Skills,
-		users:       deps.Users,
-		questions:   deps.Questions,
-		admin:       deps.Admin,
-		adminGetter: deps.AdminGetter,
-		reviewQueue: deps.ReviewQueue,
-		srs:         deps.SRS,
-		taskSlots:   deps.TaskSlots,
-		taskOptions: deps.TaskOptions,
-		calendar:    deps.Calendar,
-		attempts:    deps.Attempts,
-		home:        deps.Home,
+		health:       deps.Health,
+		skills:       deps.Skills,
+		users:        deps.Users,
+		questions:    deps.Questions,
+		admin:        deps.Admin,
+		adminGetter:  deps.AdminGetter,
+		adminUpdater: deps.AdminUpdater,
+		reviewQueue:  deps.ReviewQueue,
+		srs:          deps.SRS,
+		taskSlots:    deps.TaskSlots,
+		taskOptions:  deps.TaskOptions,
+		calendar:     deps.Calendar,
+		attempts:     deps.Attempts,
+		home:         deps.Home,
 	}
 }
