@@ -6,12 +6,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
 
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
 
+	"github.com/gabaison-2026-09/codetrain-api/internal/apperr"
 	"github.com/gabaison-2026-09/codetrain-api/internal/middleware"
 	"github.com/gabaison-2026-09/codetrain-api/internal/service"
 )
@@ -44,6 +46,7 @@ func serve(t *testing.T, h echo.HandlerFunc, method, path, sub string) *httptest
 	t.Helper()
 
 	e := echo.New()
+	e.HTTPErrorHandler = apperr.HTTPErrorHandler
 	req := httptest.NewRequest(method, path, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -153,6 +156,7 @@ func TestMe(t *testing.T) {
 		sub        string
 		me         func(ctx context.Context, externalID string) (service.UserWithProgress, error)
 		wantStatus int
+		wantCode   string // 失敗時のエラーエンベロープ code。空なら検証しない。
 	}{
 		{
 			name:       "認証済みならユーザーを返す",
@@ -165,6 +169,7 @@ func TestMe(t *testing.T) {
 			sub:        "",
 			me:         func(context.Context, string) (service.UserWithProgress, error) { return okUser, nil },
 			wantStatus: http.StatusUnauthorized,
+			wantCode:   apperr.CodeUnauthorized,
 		},
 		{
 			name: "ユーザーが無ければ 404",
@@ -173,6 +178,7 @@ func TestMe(t *testing.T) {
 				return service.UserWithProgress{}, service.ErrUserNotFound
 			},
 			wantStatus: http.StatusNotFound,
+			wantCode:   apperr.CodeUserNotFound,
 		},
 		{
 			name: "その他の失敗は 500",
@@ -181,6 +187,7 @@ func TestMe(t *testing.T) {
 				return service.UserWithProgress{}, errors.New("DB 障害")
 			},
 			wantStatus: http.StatusInternalServerError,
+			wantCode:   apperr.CodeInternalError,
 		},
 	}
 
@@ -193,6 +200,31 @@ func TestMe(t *testing.T) {
 				t.Fatalf("status = %d, want %d (body=%s)", rec.Code, tt.wantStatus, rec.Body.String())
 			}
 			if tt.wantStatus != http.StatusOK {
+				if tt.wantCode == "" {
+					return
+				}
+				var env struct {
+					Error struct {
+						Status  int    `json:"status"`
+						Code    string `json:"code"`
+						Message string `json:"message"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+					t.Fatalf("エンベロープの解析に失敗: %v (body=%s)", err, rec.Body.String())
+				}
+				if env.Error.Status != tt.wantStatus {
+					t.Errorf("error.status = %d, want %d", env.Error.Status, tt.wantStatus)
+				}
+				if env.Error.Code != tt.wantCode {
+					t.Errorf("error.code = %q, want %q", env.Error.Code, tt.wantCode)
+				}
+				if env.Error.Message == "" {
+					t.Errorf("error.message が空")
+				}
+				if tt.wantStatus == http.StatusInternalServerError && strings.Contains(env.Error.Message, "DB 障害") {
+					t.Errorf("500 応答に原因文字列が漏れている: %q", env.Error.Message)
+				}
 				return
 			}
 			var body service.UserWithProgress
