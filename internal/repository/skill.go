@@ -26,8 +26,10 @@ func (p *Postgres) ListSkills(ctx context.Context) ([]domain.Skill, error) {
 
 // ListSkillNodes は全スキルのノードを skill_id・表示順で返す。
 func (p *Postgres) ListSkillNodes(ctx context.Context) ([]domain.SkillNode, error) {
+	// 先修関係（skill_node_prerequisite）は配信の表示に不要なため、ここでは引かない。
+	// 必要になったら別クエリで PrerequisiteNodeIDs を埋める。
 	rows, err := p.pool.Query(ctx, `
-		SELECT id, skill_id, parent_id, slug, name, COALESCE(description, ''),
+		SELECT id, skill_id, slug, name, COALESCE(description, ''),
 		       difficulty, display_order
 		  FROM skill_node
 		 ORDER BY skill_id, display_order, id`)
@@ -36,7 +38,7 @@ func (p *Postgres) ListSkillNodes(ctx context.Context) ([]domain.SkillNode, erro
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (domain.SkillNode, error) {
 		var n domain.SkillNode
-		err := r.Scan(&n.ID, &n.SkillID, &n.ParentID, &n.Slug, &n.Name,
+		err := r.Scan(&n.ID, &n.SkillID, &n.Slug, &n.Name,
 			&n.Description, &n.Difficulty, &n.DisplayOrder)
 		return n, err
 	})

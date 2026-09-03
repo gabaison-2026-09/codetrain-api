@@ -55,4 +55,23 @@ func TestLoad(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("REVIEWER_SUBS はカンマ区切り", func(t *testing.T) {
+		t.Setenv("DATABASE_URL", dsn)
+		t.Setenv("REVIEWER_SUBS", "reviewer-01, reviewer-02 ,")
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		want := []string{"reviewer-01", "reviewer-02"}
+		if len(cfg.ReviewerSubs) != len(want) {
+			t.Fatalf("ReviewerSubs = %v, want %v", cfg.ReviewerSubs, want)
+		}
+		for i := range want {
+			if cfg.ReviewerSubs[i] != want[i] {
+				t.Errorf("ReviewerSubs[%d] = %q, want %q", i, cfg.ReviewerSubs[i], want[i])
+			}
+		}
+	})
 }

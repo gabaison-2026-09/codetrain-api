@@ -10,6 +10,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
 )
@@ -19,13 +20,92 @@ type HealthRepository interface {
 	Ping(ctx context.Context) error
 }
 
+// UserPatch はユーザープロフィールの部分更新内容。
+// nilのフィールドは更新しない。
+type UserPatch struct {
+	DisplayName *string
+	AvatarURL   *string
+}
+
 // SkillRepository はスキルツリーの取得。行を返すだけで、組み立ては service が行う。
 type SkillRepository interface {
 	ListSkills(ctx context.Context) ([]domain.Skill, error)
 	ListSkillNodes(ctx context.Context) ([]domain.SkillNode, error)
 }
 
-// UserRepository はユーザーと進捗の取得。
-type UserRepository interface {
+// UserLookupRepository は認証基盤上の識別子からユーザーを解決する。
+type UserLookupRepository interface {
 	FindUserByExternalID(ctx context.Context, externalID string) (domain.User, domain.Progress, error)
+}
+
+// UserRepository はユーザーと進捗の取得・作成。
+type UserRepository interface {
+	UserLookupRepository
+	InsertUser(ctx context.Context, externalID, displayName string, avatarURL *string) (domain.User, domain.Progress, error)
+	UpdateUser(
+		ctx context.Context,
+		externalID string,
+		displayName *string,
+		avatarURL *string,
+	) (domain.User, error)
+}
+
+// QuestionRepository は published 問題の検索・取得。行を返すだけで、ページングは service が行う。
+type QuestionRepository interface {
+	SearchQuestions(ctx context.Context, userID string, q domain.QuestionSearch) ([]domain.QuestionSummary, error)
+	// FindPublishedByID は status=published の問題を1件返す。answered は
+	// 当該ユーザーの attempt が存在するかどうか。該当行がなければ repository.ErrNotFound。
+	FindPublishedByID(ctx context.Context, userID, questionID string) (domain.Question, bool, error)
+}
+
+// AdminQuestionRepository は status を問わない管理者向け問題検索。
+type AdminQuestionRepository interface {
+	SearchAdminQuestions(ctx context.Context, params domain.AdminQuestionSearch) ([]domain.AdminQuestionSummary, error)
+}
+
+// AdminQuestionDetailRepository は管理者向け問題詳細とレビュー履歴を取得する。
+type AdminQuestionDetailRepository interface {
+	FindQuestionFull(ctx context.Context, questionID string) (domain.AdminQuestion, error)
+	ListReviewHistory(ctx context.Context, questionID string) ([]domain.ReviewEntry, error)
+}
+
+// ReviewQueueRepository は未レビュー問題のキューを取得する。
+type ReviewQueueRepository interface {
+	ListReviewQueue(ctx context.Context, cursorQueuedAt *time.Time, cursorID string, limit int) ([]domain.ReviewQueueItem, error)
+}
+
+// AttemptRepository は回答と、それに伴う全ての進捗更新を1トランザクションで記録する。
+type AttemptRepository interface {
+	RecordAttempt(ctx context.Context, attempt domain.Attempt, question domain.Question, xpGained int) (domain.AttemptResult, error)
+}
+
+// SRSRepository は復習期限の問題を取得する。
+type SRSRepository interface {
+	ListDue(ctx context.Context, userID string, limit int) ([]domain.SRSDueItem, error)
+}
+
+// TaskSlotRepository はユーザーのタスクスロット設定を取得する。
+type TaskSlotRepository interface {
+	ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error)
+	DeleteUserTask(ctx context.Context, userID string, slotNo int) error
+}
+
+// TaskOptionRepository は認証ユーザーの解決とタスク候補の取得。
+type TaskOptionRepository interface {
+	UserLookupRepository
+	ListTaskOptions(ctx context.Context) ([]domain.TaskOption, error)
+	OptionExists(ctx context.Context, questionType domain.QuestionType, language string, difficulty *int) (bool, error)
+	UpsertUserTask(ctx context.Context, userID string, slot domain.TaskConfig) (domain.TaskConfig, error)
+}
+
+type CalendarRepository interface {
+	DailyConsumption(ctx context.Context, userID string, from, to string) ([]domain.CalendarDay, error)
+	Streak(ctx context.Context, userID string) (int, *string, error)
+}
+
+type HomeRepository interface {
+	ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error)
+	PickUnansweredPublished(ctx context.Context, userID string, typ domain.QuestionType, language string, difficulty int) (domain.Question, error)
+	UpsertDailyTask(ctx context.Context, userID string, slot domain.TaskConfig, questionID string) error
+	GetTodayHome(ctx context.Context, userID string) ([]domain.HomeTask, error)
 }

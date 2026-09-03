@@ -1,0 +1,65 @@
+name: build-push
+
+# main マージで ECR push（REPOSITORIES.md §4.2、認証は codetrain-infra/docs/BOOTSTRAP.md の
+# codetrain-api-ecr-push ロール。region/account/role は本リポジトリの Variables に登録済み:
+# AWS_REGION / AWS_ACCOUNT_ID / AWS_ROLE_ECR_PUSH）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - "Dockerfile"
+      - ".github/workflows/build-push.yml"
+
+concurrency:
+  group: build-push-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # codetrain-core は Go module としてバージョン固定で参照する（go.mod の
+      # `require github.com/gabaison-2026-09/codetrain-core vX.Y.Z`）。core は public
+      # なので proxy 経由でそのまま取得でき、横並びチェックアウトは不要。
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: vet & test
+        run: |
+          go vet ./...
+          go test ./...
+
+  build-push:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ECR_PUSH }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: build & push
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/codetrain-api
+        run: |
+          docker build -t "$IMAGE:${{ github.sha }}" .
+          docker push "$IMAGE:${{ github.sha }}"

@@ -3,9 +3,6 @@
 // この層の責務は HTTP の関心だけ —— リクエストからの値の取り出し、
 // service 層の呼び出し、エラーからステータスコードへの変換、JSON 化。
 // ビジネスロジックは service 層に置き、ここには書かない。
-//
-// 今回のスコープはローカル環境が立ち上がったことを確認できる最小限
-// （/healthz・/v1/skills・/v1/me）。MVP ループの実装は Phase 2 で追加する。
 package handler
 
 import (
@@ -29,14 +26,104 @@ type SkillLister interface {
 
 type UserFinder interface {
 	Me(ctx context.Context, externalID string) (service.UserWithProgress, error)
+	Create(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
+	Update(
+		ctx context.Context,
+		externalID string,
+		patch service.UserPatch,
+	) (domain.User, error)
+}
+
+type QuestionLister interface {
+	List(ctx context.Context, externalID string, params service.QuestionSearchParams) (service.QuestionList, error)
+	GetForUser(ctx context.Context, externalID, questionID string) (domain.QuestionDetail, error)
+}
+
+type AdminQuestionLister interface {
+	List(ctx context.Context, params service.AdminQuestionSearchParams) (service.AdminQuestionList, error)
+}
+
+type AdminQuestionGetter interface {
+	Get(ctx context.Context, questionID string) (domain.AdminQuestion, error)
+}
+
+type ReviewQueueLister interface {
+	List(ctx context.Context, params service.ReviewQueueParams) (service.ReviewQueueList, error)
+}
+
+type AttemptSubmitter interface {
+	Submit(ctx context.Context, externalID, questionID string, in service.SubmitAttemptInput) (domain.AttemptResult, error)
+}
+
+type SRSDueLister interface {
+	ListDue(ctx context.Context, externalID string, limit int) ([]domain.SRSDueItem, error)
+}
+
+type TaskSlotLister interface {
+	ListSlots(ctx context.Context, externalID string) ([]domain.TaskConfig, error)
+	DeleteSlot(ctx context.Context, externalID string, slotNo int) error
+}
+
+type TaskOptionLister interface {
+	List(ctx context.Context, externalID string) ([]domain.TaskOption, error)
+	SetSlot(ctx context.Context, externalID string, slot domain.TaskConfig) (domain.TaskConfig, error)
+}
+
+type CalendarGetter interface {
+	Get(ctx context.Context, externalID, from, to string) (domain.Calendar, error)
+}
+type HomeGetter interface {
+	Get(ctx context.Context, externalID string) (domain.Home, error)
 }
 
 type Handler struct {
-	health HealthChecker
-	skills SkillLister
-	users  UserFinder
+	health      HealthChecker
+	skills      SkillLister
+	users       UserFinder
+	questions   QuestionLister
+	admin       AdminQuestionLister
+	adminGetter AdminQuestionGetter
+	reviewQueue ReviewQueueLister
+	srs         SRSDueLister
+	taskSlots   TaskSlotLister
+	taskOptions TaskOptionLister
+	calendar    CalendarGetter
+	attempts    AttemptSubmitter
+	home        HomeGetter
 }
 
-func New(health HealthChecker, skills SkillLister, users UserFinder) *Handler {
-	return &Handler{health: health, skills: skills, users: users}
+// Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
+// 足すだけで済み、既存の New 呼び出し（テスト含む）を壊さない。
+type Deps struct {
+	Health      HealthChecker
+	Skills      SkillLister
+	Users       UserFinder
+	Questions   QuestionLister
+	Admin       AdminQuestionLister
+	AdminGetter AdminQuestionGetter
+	ReviewQueue ReviewQueueLister
+	SRS         SRSDueLister
+	TaskSlots   TaskSlotLister
+	TaskOptions TaskOptionLister
+	Calendar    CalendarGetter
+	Attempts    AttemptSubmitter
+	Home        HomeGetter
+}
+
+func New(deps Deps) *Handler {
+	return &Handler{
+		health:      deps.Health,
+		skills:      deps.Skills,
+		users:       deps.Users,
+		questions:   deps.Questions,
+		admin:       deps.Admin,
+		adminGetter: deps.AdminGetter,
+		reviewQueue: deps.ReviewQueue,
+		srs:         deps.SRS,
+		taskSlots:   deps.TaskSlots,
+		taskOptions: deps.TaskOptions,
+		calendar:    deps.Calendar,
+		attempts:    deps.Attempts,
+		home:        deps.Home,
+	}
 }

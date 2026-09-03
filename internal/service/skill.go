@@ -30,7 +30,7 @@ func (s *Skill) List(ctx context.Context) ([]domain.Skill, error) {
 		return nil, err
 	}
 
-	bySkill := make(map[int64][]domain.SkillNode, len(skills))
+	bySkill := make(map[string][]domain.SkillNode, len(skills))
 	for _, n := range nodes {
 		bySkill[n.SkillID] = append(bySkill[n.SkillID], n)
 	}
