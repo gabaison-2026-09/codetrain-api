@@ -60,6 +60,7 @@ func run() error {
 		TaskOptions: service.NewTaskOptions(repo),
 		Questions:   service.NewQuestion(repo, repo),
 		SRS:         service.NewSRS(repo, repo),
+		Calendar:    service.NewCalendar(repo, repo),
 	})
 
 	e := server.New(cfg, h, auth)
