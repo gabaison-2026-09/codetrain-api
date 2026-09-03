@@ -10,9 +10,12 @@ import (
 // User はユーザー情報のユースケース。
 type User struct {
 	userResolver
+	repo UserRepository
 }
 
-func NewUser(repo UserRepository) *User { return &User{userResolver{repo: repo}} }
+func NewUser(repo UserRepository) *User {
+	return &User{userResolver: userResolver{repo: repo}, repo: repo}
+}
 
 // Me は認証済みユーザーの sub（external_id）からユーザーと進捗を返す。
 // 該当ユーザーがいない場合は ErrUserNotFound を返す。
