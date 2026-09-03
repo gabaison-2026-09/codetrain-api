@@ -43,6 +43,10 @@ type SRSDueLister interface {
 	ListDue(ctx context.Context, externalID string, limit int) ([]domain.SRSDueItem, error)
 }
 
+type TaskSlotLister interface {
+	ListSlots(ctx context.Context, externalID string) ([]domain.TaskConfig, error)
+}
+
 type TaskOptionLister interface {
 	List(ctx context.Context, externalID string) ([]domain.TaskOption, error)
 	SetSlot(ctx context.Context, externalID string, slot domain.TaskConfig) (domain.TaskConfig, error)
@@ -52,9 +56,10 @@ type Handler struct {
 	health      HealthChecker
 	skills      SkillLister
 	users       UserFinder
-	taskOptions TaskOptionLister
 	questions   QuestionLister
 	srs         SRSDueLister
+	taskSlots   TaskSlotLister
+	taskOptions TaskOptionLister
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
@@ -63,9 +68,10 @@ type Deps struct {
 	Health      HealthChecker
 	Skills      SkillLister
 	Users       UserFinder
-	TaskOptions TaskOptionLister
 	Questions   QuestionLister
 	SRS         SRSDueLister
+	TaskSlots   TaskSlotLister
+	TaskOptions TaskOptionLister
 }
 
 func New(deps Deps) *Handler {
@@ -73,8 +79,9 @@ func New(deps Deps) *Handler {
 		health:      deps.Health,
 		skills:      deps.Skills,
 		users:       deps.Users,
-		taskOptions: deps.TaskOptions,
 		questions:   deps.Questions,
 		srs:         deps.SRS,
+		taskSlots:   deps.TaskSlots,
+		taskOptions: deps.TaskOptions,
 	}
 }

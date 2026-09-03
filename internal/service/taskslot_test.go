@@ -46,7 +46,7 @@ func TestTaskSlotList(t *testing.T) {
 			},
 		}
 
-		got, err := NewTaskSlot(repo).List(context.Background(), "seed-user-01")
+		got, err := NewTaskOptions(repo).List(context.Background(), "seed-user-01")
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -66,7 +66,7 @@ func TestTaskSlotList(t *testing.T) {
 			list: func(context.Context) ([]domain.TaskOption, error) { return nil, nil },
 		}
 
-		got, err := NewTaskSlot(repo).List(context.Background(), "seed-user-01")
+		got, err := NewTaskOptions(repo).List(context.Background(), "seed-user-01")
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -87,7 +87,7 @@ func TestTaskSlotList(t *testing.T) {
 			},
 		}
 
-		_, err := NewTaskSlot(repo).List(context.Background(), "no-such-user")
+		_, err := NewTaskOptions(repo).List(context.Background(), "no-such-user")
 		if !errors.Is(err, ErrUserNotFound) {
 			t.Errorf("err = %v, want %v", err, ErrUserNotFound)
 		}
@@ -105,7 +105,7 @@ func TestTaskSlotList(t *testing.T) {
 			list: func(context.Context) ([]domain.TaskOption, error) { return nil, wantErr },
 		}
 
-		_, err := NewTaskSlot(repo).List(context.Background(), "seed-user-01")
+		_, err := NewTaskOptions(repo).List(context.Background(), "seed-user-01")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("err = %v, want %v", err, wantErr)
 		}
@@ -143,7 +143,7 @@ func TestTaskSlotSetSlot(t *testing.T) {
 			},
 		}
 
-		got, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", want)
+		got, err := NewTaskOptions(repo).SetSlot(context.Background(), "seed-user-01", want)
 		if err != nil {
 			t.Fatalf("SetSlot: %v", err)
 		}
@@ -170,14 +170,14 @@ func TestTaskSlotSetSlot(t *testing.T) {
 			},
 		}
 
-		if _, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", slot); err != nil {
+		if _, err := NewTaskOptions(repo).SetSlot(context.Background(), "seed-user-01", slot); err != nil {
 			t.Fatalf("SetSlot: %v", err)
 		}
 	})
 
 	t.Run("スロット番号が範囲外ならリポジトリを呼ばない", func(t *testing.T) {
 		repo := fakeTaskOptionRepo{}
-		_, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", domain.TaskConfig{SlotNo: 6})
+		_, err := NewTaskOptions(repo).SetSlot(context.Background(), "seed-user-01", domain.TaskConfig{SlotNo: 6})
 		if !errors.Is(err, ErrTaskSlotNoInvalid) {
 			t.Errorf("err = %v, want %v", err, ErrTaskSlotNoInvalid)
 		}
@@ -193,7 +193,7 @@ func TestTaskSlotSetSlot(t *testing.T) {
 				return false, nil
 			},
 		}
-		_, err := NewTaskSlot(repo).SetSlot(context.Background(), "no-such-user", want)
+		_, err := NewTaskOptions(repo).SetSlot(context.Background(), "no-such-user", want)
 		if !errors.Is(err, ErrUserNotFound) {
 			t.Errorf("err = %v, want %v", err, ErrUserNotFound)
 		}
@@ -212,7 +212,7 @@ func TestTaskSlotSetSlot(t *testing.T) {
 				return domain.TaskConfig{}, nil
 			},
 		}
-		_, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", want)
+		_, err := NewTaskOptions(repo).SetSlot(context.Background(), "seed-user-01", want)
 		if !errors.Is(err, ErrTaskSlotOptionInvalid) {
 			t.Errorf("err = %v, want %v", err, ErrTaskSlotOptionInvalid)
 		}
@@ -239,7 +239,7 @@ func TestTaskSlotSetSlot(t *testing.T) {
 						return domain.TaskConfig{}, tc.upsertErr
 					},
 				}
-				_, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", want)
+				_, err := NewTaskOptions(repo).SetSlot(context.Background(), "seed-user-01", want)
 				wantErr := tc.existsErr
 				if wantErr == nil {
 					wantErr = tc.upsertErr
@@ -250,4 +250,70 @@ func TestTaskSlotSetSlot(t *testing.T) {
 			})
 		}
 	})
+}
+
+type fakeTaskSlotRepo struct {
+	list func(context.Context, string) ([]domain.TaskConfig, error)
+}
+
+func (f fakeTaskSlotRepo) ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error) {
+	return f.list(ctx, userID)
+}
+
+func TestTaskSlotListSlots(t *testing.T) {
+	var gotUserID string
+	difficulty := 3
+	svc := NewTaskSlot(fakeUserRepo{
+		find: func(context.Context, string) (domain.User, domain.Progress, error) {
+			return domain.User{ID: "u1"}, domain.Progress{}, nil
+		},
+	}, fakeTaskSlotRepo{
+		list: func(_ context.Context, userID string) ([]domain.TaskConfig, error) {
+			gotUserID = userID
+			return []domain.TaskConfig{
+				{SlotNo: 1, QuestionType: domain.QuestionTypeCodeReading, Language: "typescript"},
+				{SlotNo: 2, QuestionType: domain.QuestionTypeOutputPrediction, Difficulty: &difficulty},
+			}, nil
+		},
+	})
+
+	got, err := svc.ListSlots(context.Background(), "seed-user-01")
+	if err != nil {
+		t.Fatalf("ListSlots: %v", err)
+	}
+	if gotUserID != "u1" {
+		t.Fatalf("repository userID = %q, want %q", gotUserID, "u1")
+	}
+	if len(got) != 2 || got[1].Difficulty == nil || *got[1].Difficulty != 3 {
+		t.Fatalf("slots = %+v", got)
+	}
+}
+
+func TestTaskSlotListSlotsEmptyIsArray(t *testing.T) {
+	svc := NewTaskSlot(fakeUserRepo{
+		find: func(context.Context, string) (domain.User, domain.Progress, error) {
+			return domain.User{ID: "u1"}, domain.Progress{}, nil
+		},
+	}, fakeTaskSlotRepo{
+		list: func(context.Context, string) ([]domain.TaskConfig, error) { return nil, nil },
+	})
+
+	got, err := svc.ListSlots(context.Background(), "seed-user-01")
+	if err != nil || got == nil || len(got) != 0 {
+		t.Fatalf("slots = %#v, err = %v", got, err)
+	}
+}
+
+func TestTaskSlotListSlotsResolvesUserError(t *testing.T) {
+	svc := NewTaskSlot(fakeUserRepo{
+		find: func(context.Context, string) (domain.User, domain.Progress, error) {
+			return domain.User{}, domain.Progress{}, errors.New("DB障害")
+		},
+	}, fakeTaskSlotRepo{
+		list: func(context.Context, string) ([]domain.TaskConfig, error) { t.Fatal("not called"); return nil, nil },
+	})
+
+	if _, err := svc.ListSlots(context.Background(), "seed-user-01"); err == nil {
+		t.Fatal("expected error")
+	}
 }
