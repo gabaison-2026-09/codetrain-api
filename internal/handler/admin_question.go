@@ -61,6 +61,58 @@ func (h *Handler) AdminGetQuestion(c echo.Context) error {
 	return c.JSON(http.StatusOK, question)
 }
 
+// AdminUpdateQuestion は PATCH /v1/admin/questions/:id。指定された項目だけ更新する。
+func (h *Handler) AdminUpdateQuestion(c echo.Context) error {
+	if _, ok := middleware.Subject(c); !ok {
+		return apperr.Unauthorized("認証が必要です")
+	}
+
+	id := c.Param("id")
+	if !uuidPattern.MatchString(id) {
+		return apperr.Validation("id は uuid 形式で指定してください")
+	}
+
+	var patch domain.AdminQuestionPatch
+	if err := c.Bind(&patch); err != nil {
+		return apperr.Validation("リクエストボディが不正です")
+	}
+	if patch.Difficulty != nil && (*patch.Difficulty < 1 || *patch.Difficulty > 5) {
+		return apperr.Validation("difficulty は 1〜5 で指定してください")
+	}
+	if patch.Choices != nil && len(*patch.Choices) == 0 {
+		return apperr.Validation("choices は1要素以上指定してください")
+	}
+	if patch.CodeLanguage != nil && !validCodeLanguage(*patch.CodeLanguage) {
+		return apperr.Validation("code_language が不正です")
+	}
+	if patch.SkillNodeID != nil && *patch.SkillNodeID != "" && !uuidPattern.MatchString(*patch.SkillNodeID) {
+		return apperr.Validation("skill_node_id は uuid 形式で指定してください")
+	}
+
+	question, err := h.adminUpdater.Update(c.Request().Context(), id, patch)
+	if errors.Is(err, service.ErrQuestionNotFound) {
+		return apperr.New(apperr.CodeQuestionNotFound, http.StatusNotFound, "問題が見つかりません")
+	}
+	if err != nil {
+		var apiErr *apperr.APIError
+		if errors.As(err, &apiErr) {
+			return apiErr
+		}
+		return internalError(c, "管理者向け問題の更新に失敗しました", err)
+	}
+	return c.JSON(http.StatusOK, question)
+}
+
+func validCodeLanguage(language string) bool {
+	switch language {
+	case "c", "cpp", "csharp", "go", "java", "javascript", "kotlin",
+		"python", "ruby", "rust", "swift", "typescript":
+		return true
+	default:
+		return false
+	}
+}
+
 func parseAdminQuestionSearch(c echo.Context) (service.AdminQuestionSearchParams, error) {
 	page, err := paging.ParseParams(c)
 	if err != nil {

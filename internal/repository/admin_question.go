@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -72,6 +73,113 @@ SELECT q.id, q.status, q.type, q.difficulty, q.title, q.body,
 
 	q.ReviewHistory = []domain.ReviewEntry{}
 
+	return q, nil
+}
+
+// UpdateQuestion は指定されたフィールドだけ問題を更新する。
+func (p *Postgres) UpdateQuestion(ctx context.Context, questionID string, patch domain.AdminQuestionPatch) (domain.AdminQuestion, error) {
+	set := []string{"updated_at = now()"}
+	args := make([]any, 0, 11)
+	add := func(column string, value any) {
+		args = append(args, value)
+		set = append(set, fmt.Sprintf("%s = $%d", column, len(args)))
+	}
+	if patch.Title != nil {
+		add("title", *patch.Title)
+	}
+	if patch.Body != nil {
+		add("body", *patch.Body)
+	}
+	if patch.Code != nil {
+		add("code", *patch.Code)
+	}
+	if patch.CodeLanguage != nil {
+		add("code_language", *patch.CodeLanguage)
+	}
+	if patch.Choices != nil {
+		value, err := json.Marshal(*patch.Choices)
+		if err != nil {
+			return domain.AdminQuestion{}, err
+		}
+		add("choices", value)
+	}
+	if patch.CorrectKeys != nil {
+		value, err := json.Marshal(*patch.CorrectKeys)
+		if err != nil {
+			return domain.AdminQuestion{}, err
+		}
+		add("correct_keys", value)
+	}
+	if patch.Explanation != nil {
+		add("explanation", *patch.Explanation)
+	}
+	if patch.Difficulty != nil {
+		add("difficulty", *patch.Difficulty)
+	}
+	if patch.Tags != nil {
+		add("tags", *patch.Tags)
+	}
+	if patch.SkillNodeID != nil {
+		add("skill_node_id", *patch.SkillNodeID)
+	}
+
+	args = append(args, questionID)
+	var q domain.AdminQuestion
+	var choices, correctKeys []byte
+	var code, codeLanguage, explanation *string
+	var skillNodeID *string
+	var rawSourceID string
+	var promptVersion, modelID *string
+	var genTokens *int
+	query := fmt.Sprintf(`UPDATE question SET %s
+ WHERE id = $%d
+ RETURNING id, status, type, difficulty, title, body, code, code_language,
+           choices, correct_keys, explanation, tags, skill_node_id, raw_source_id,
+           prompt_version, model_id, gen_tokens, generated_at`, strings.Join(set, ", "), len(args))
+	err := p.pool.QueryRow(ctx, query, args...).Scan(
+		&q.ID, &q.Status, &q.Type, &q.Difficulty, &q.Title, &q.Body,
+		&code, &codeLanguage, &choices, &correctKeys, &explanation, &q.Tags,
+		&skillNodeID, &rawSourceID, &promptVersion, &modelID, &genTokens, &q.GeneratedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.AdminQuestion{}, ErrNotFound
+	}
+	if err != nil {
+		return domain.AdminQuestion{}, err
+	}
+	if err := json.Unmarshal(choices, &q.Choices); err != nil {
+		return domain.AdminQuestion{}, err
+	}
+	if err := json.Unmarshal(correctKeys, &q.CorrectKeys); err != nil {
+		return domain.AdminQuestion{}, err
+	}
+	q.SkillNodeID, q.RawSourceID = skillNodeID, rawSourceID
+	q.GenTokens = genTokens
+	if code != nil {
+		q.Code = *code
+	}
+	if codeLanguage != nil {
+		q.CodeLanguage = *codeLanguage
+	}
+	if explanation != nil {
+		q.Explanation = *explanation
+	}
+	if promptVersion != nil {
+		q.PromptVersion = *promptVersion
+	}
+	if modelID != nil {
+		q.ModelID = *modelID
+	}
+	if q.Choices == nil {
+		q.Choices = []domain.Choice{}
+	}
+	if q.CorrectKeys == nil {
+		q.CorrectKeys = []string{}
+	}
+	if q.Tags == nil {
+		q.Tags = []string{}
+	}
+	q.ReviewHistory = []domain.ReviewEntry{}
 	return q, nil
 }
 

@@ -21,7 +21,11 @@ type adminQuestionCursor struct {
 type AdminQuestion struct {
 	questions AdminQuestionRepository
 	details   AdminQuestionDetailRepository
+	updater   AdminQuestionUpdateRepository
 }
+
+// AdminQuestionPatch は問題の部分更新内容。
+type AdminQuestionPatch = domain.AdminQuestionPatch
 
 func NewAdminQuestion(questions AdminQuestionRepository, details ...AdminQuestionDetailRepository) *AdminQuestion {
 	var detailRepo AdminQuestionDetailRepository
@@ -29,6 +33,14 @@ func NewAdminQuestion(questions AdminQuestionRepository, details ...AdminQuestio
 		detailRepo = details[0]
 	}
 	return &AdminQuestion{questions: questions, details: detailRepo}
+}
+
+func NewAdminQuestionWithUpdater(
+	questions AdminQuestionRepository,
+	details AdminQuestionDetailRepository,
+	updater AdminQuestionUpdateRepository,
+) *AdminQuestion {
+	return &AdminQuestion{questions: questions, details: details, updater: updater}
 }
 
 // List は status を問わず問題を条件検索して1頁返す。
@@ -93,4 +105,54 @@ func (s *AdminQuestion) Get(ctx context.Context, questionID string) (domain.Admi
 	}
 	question.ReviewHistory = history
 	return question, nil
+}
+
+// Update は指定されたフィールドだけ問題を更新し、更新後の詳細とレビュー履歴を返す。
+func (s *AdminQuestion) Update(ctx context.Context, questionID string, patch domain.AdminQuestionPatch) (domain.AdminQuestion, error) {
+	if s.updater == nil || s.details == nil {
+		return domain.AdminQuestion{}, ErrQuestionNotFound
+	}
+
+	current, err := s.details.FindQuestionFull(ctx, questionID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return domain.AdminQuestion{}, ErrQuestionNotFound
+	}
+	if err != nil {
+		return domain.AdminQuestion{}, err
+	}
+
+	choices := current.Choices
+	if patch.Choices != nil {
+		choices = *patch.Choices
+	}
+	correctKeys := current.CorrectKeys
+	if patch.CorrectKeys != nil {
+		correctKeys = *patch.CorrectKeys
+	}
+	validChoices := make(map[string]struct{}, len(choices))
+	for _, choice := range choices {
+		validChoices[choice.Key] = struct{}{}
+	}
+	for _, key := range correctKeys {
+		if _, ok := validChoices[key]; !ok {
+			return domain.AdminQuestion{}, apperr.Validation("correct_keys に choices に存在しない key が含まれています")
+		}
+	}
+
+	updated, err := s.updater.UpdateQuestion(ctx, questionID, patch)
+	if errors.Is(err, repository.ErrNotFound) {
+		return domain.AdminQuestion{}, ErrQuestionNotFound
+	}
+	if err != nil {
+		return domain.AdminQuestion{}, err
+	}
+	history, err := s.details.ListReviewHistory(ctx, questionID)
+	if err != nil {
+		return domain.AdminQuestion{}, err
+	}
+	if history == nil {
+		history = []domain.ReviewEntry{}
+	}
+	updated.ReviewHistory = history
+	return updated, nil
 }
