@@ -66,4 +66,6 @@ type SRSRepository interface {
 type TaskOptionRepository interface {
 	UserLookupRepository
 	ListTaskOptions(ctx context.Context) ([]domain.TaskOption, error)
+	OptionExists(ctx context.Context, questionType domain.QuestionType, language string, difficulty *int) (bool, error)
+	UpsertUserTask(ctx context.Context, userID string, slot domain.TaskConfig) (domain.TaskConfig, error)
 }

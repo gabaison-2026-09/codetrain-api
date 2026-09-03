@@ -17,3 +17,9 @@ var ErrQuestionNotFound = errors.New("問題が見つかりません")
 // repository.ErrAlreadyExists をユースケース語彙に翻訳したもので、
 // handler はこれだけを見て 409 USER_ALREADY_PROVISIONED を返す。
 var ErrUserAlreadyProvisioned = errors.New("ユーザーは既に作成済みです")
+
+// ErrTaskSlotNoInvalid はタスクスロット番号が 1〜5 の範囲外であることを表す。
+var ErrTaskSlotNoInvalid = errors.New("タスクスロット番号が不正です")
+
+// ErrTaskSlotOptionInvalid は指定されたタスク条件が利用可能な候補に存在しないことを表す。
+var ErrTaskSlotOptionInvalid = errors.New("タスク条件の組み合わせが不正です")

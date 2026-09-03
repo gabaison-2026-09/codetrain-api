@@ -11,8 +11,10 @@ import (
 )
 
 type fakeTaskOptionRepo struct {
-	find func(context.Context, string) (domain.User, domain.Progress, error)
-	list func(context.Context) ([]domain.TaskOption, error)
+	find   func(context.Context, string) (domain.User, domain.Progress, error)
+	list   func(context.Context) ([]domain.TaskOption, error)
+	exists func(context.Context, domain.QuestionType, string, *int) (bool, error)
+	upsert func(context.Context, string, domain.TaskConfig) (domain.TaskConfig, error)
 }
 
 func (f fakeTaskOptionRepo) FindUserByExternalID(ctx context.Context, externalID string) (domain.User, domain.Progress, error) {
@@ -21,6 +23,14 @@ func (f fakeTaskOptionRepo) FindUserByExternalID(ctx context.Context, externalID
 
 func (f fakeTaskOptionRepo) ListTaskOptions(ctx context.Context) ([]domain.TaskOption, error) {
 	return f.list(ctx)
+}
+
+func (f fakeTaskOptionRepo) OptionExists(ctx context.Context, questionType domain.QuestionType, language string, difficulty *int) (bool, error) {
+	return f.exists(ctx, questionType, language, difficulty)
+}
+
+func (f fakeTaskOptionRepo) UpsertUserTask(ctx context.Context, userID string, slot domain.TaskConfig) (domain.TaskConfig, error) {
+	return f.upsert(ctx, userID, slot)
 }
 
 func TestTaskSlotList(t *testing.T) {
@@ -98,6 +108,146 @@ func TestTaskSlotList(t *testing.T) {
 		_, err := NewTaskSlot(repo).List(context.Background(), "seed-user-01")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("err = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestTaskSlotSetSlot(t *testing.T) {
+	difficulty := 3
+	want := domain.TaskConfig{
+		SlotNo:       2,
+		QuestionType: domain.QuestionTypeBugFinding,
+		Language:     "typescript",
+		Difficulty:   &difficulty,
+	}
+
+	t.Run("ユーザーと候補を確認してスロットを保存する", func(t *testing.T) {
+		repo := fakeTaskOptionRepo{
+			find: func(_ context.Context, externalID string) (domain.User, domain.Progress, error) {
+				if externalID != "seed-user-01" {
+					t.Errorf("externalID = %q", externalID)
+				}
+				return domain.User{ID: "u1"}, domain.Progress{}, nil
+			},
+			exists: func(_ context.Context, questionType domain.QuestionType, language string, gotDifficulty *int) (bool, error) {
+				if questionType != want.QuestionType || language != want.Language || gotDifficulty == nil || *gotDifficulty != difficulty {
+					t.Errorf("option = (%q, %q, %v)", questionType, language, gotDifficulty)
+				}
+				return true, nil
+			},
+			upsert: func(_ context.Context, userID string, slot domain.TaskConfig) (domain.TaskConfig, error) {
+				if userID != "u1" || slot.SlotNo != want.SlotNo {
+					t.Errorf("userID = %q, slot = %+v", userID, slot)
+				}
+				return slot, nil
+			},
+		}
+
+		got, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", want)
+		if err != nil {
+			t.Fatalf("SetSlot: %v", err)
+		}
+		if got.SlotNo != want.SlotNo || got.QuestionType != want.QuestionType || got.Language != want.Language {
+			t.Errorf("slot = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("difficulty nil をそのまま候補確認に渡す", func(t *testing.T) {
+		slot := want
+		slot.Difficulty = nil
+		repo := fakeTaskOptionRepo{
+			find: func(context.Context, string) (domain.User, domain.Progress, error) {
+				return domain.User{ID: "u1"}, domain.Progress{}, nil
+			},
+			exists: func(_ context.Context, _ domain.QuestionType, _ string, difficulty *int) (bool, error) {
+				if difficulty != nil {
+					t.Errorf("difficulty = %v, want nil", difficulty)
+				}
+				return true, nil
+			},
+			upsert: func(_ context.Context, _ string, slot domain.TaskConfig) (domain.TaskConfig, error) {
+				return slot, nil
+			},
+		}
+
+		if _, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", slot); err != nil {
+			t.Fatalf("SetSlot: %v", err)
+		}
+	})
+
+	t.Run("スロット番号が範囲外ならリポジトリを呼ばない", func(t *testing.T) {
+		repo := fakeTaskOptionRepo{}
+		_, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", domain.TaskConfig{SlotNo: 6})
+		if !errors.Is(err, ErrTaskSlotNoInvalid) {
+			t.Errorf("err = %v, want %v", err, ErrTaskSlotNoInvalid)
+		}
+	})
+
+	t.Run("未登録ユーザーは候補確認しない", func(t *testing.T) {
+		repo := fakeTaskOptionRepo{
+			find: func(context.Context, string) (domain.User, domain.Progress, error) {
+				return domain.User{}, domain.Progress{}, repository.ErrNotFound
+			},
+			exists: func(context.Context, domain.QuestionType, string, *int) (bool, error) {
+				t.Fatal("OptionExists が呼ばれた")
+				return false, nil
+			},
+		}
+		_, err := NewTaskSlot(repo).SetSlot(context.Background(), "no-such-user", want)
+		if !errors.Is(err, ErrUserNotFound) {
+			t.Errorf("err = %v, want %v", err, ErrUserNotFound)
+		}
+	})
+
+	t.Run("候補に無い組み合わせは保存しない", func(t *testing.T) {
+		repo := fakeTaskOptionRepo{
+			find: func(context.Context, string) (domain.User, domain.Progress, error) {
+				return domain.User{ID: "u1"}, domain.Progress{}, nil
+			},
+			exists: func(context.Context, domain.QuestionType, string, *int) (bool, error) {
+				return false, nil
+			},
+			upsert: func(context.Context, string, domain.TaskConfig) (domain.TaskConfig, error) {
+				t.Fatal("UpsertUserTask が呼ばれた")
+				return domain.TaskConfig{}, nil
+			},
+		}
+		_, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", want)
+		if !errors.Is(err, ErrTaskSlotOptionInvalid) {
+			t.Errorf("err = %v, want %v", err, ErrTaskSlotOptionInvalid)
+		}
+	})
+
+	t.Run("候補確認と保存のエラーを伝播する", func(t *testing.T) {
+		for _, tc := range []struct {
+			name      string
+			existsErr error
+			upsertErr error
+		}{
+			{name: "候補確認", existsErr: errors.New("option DB 障害")},
+			{name: "保存", upsertErr: errors.New("upsert DB 障害")},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				repo := fakeTaskOptionRepo{
+					find: func(context.Context, string) (domain.User, domain.Progress, error) {
+						return domain.User{ID: "u1"}, domain.Progress{}, nil
+					},
+					exists: func(context.Context, domain.QuestionType, string, *int) (bool, error) {
+						return tc.existsErr == nil, tc.existsErr
+					},
+					upsert: func(context.Context, string, domain.TaskConfig) (domain.TaskConfig, error) {
+						return domain.TaskConfig{}, tc.upsertErr
+					},
+				}
+				_, err := NewTaskSlot(repo).SetSlot(context.Background(), "seed-user-01", want)
+				wantErr := tc.existsErr
+				if wantErr == nil {
+					wantErr = tc.upsertErr
+				}
+				if !errors.Is(err, wantErr) {
+					t.Errorf("err = %v, want %v", err, wantErr)
+				}
+			})
 		}
 	})
 }

@@ -45,6 +45,7 @@ type SRSDueLister interface {
 
 type TaskOptionLister interface {
 	List(ctx context.Context, externalID string) ([]domain.TaskOption, error)
+	SetSlot(ctx context.Context, externalID string, slot domain.TaskConfig) (domain.TaskConfig, error)
 }
 
 type Handler struct {
