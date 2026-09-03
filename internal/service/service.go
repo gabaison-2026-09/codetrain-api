@@ -51,3 +51,8 @@ type QuestionRepository interface {
 	// 当該ユーザーの attempt が存在するかどうか。該当行がなければ repository.ErrNotFound。
 	FindPublishedByID(ctx context.Context, userID, questionID string) (domain.Question, bool, error)
 }
+
+// SRSRepository は復習期限の問題を取得する。
+type SRSRepository interface {
+	ListDue(ctx context.Context, userID string, limit int) ([]domain.SRSDueItem, error)
+}
