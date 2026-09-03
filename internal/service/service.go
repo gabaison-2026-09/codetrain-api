@@ -19,6 +19,13 @@ type HealthRepository interface {
 	Ping(ctx context.Context) error
 }
 
+// UserPatch はユーザープロフィールの部分更新内容。
+// nilのフィールドは更新しない。
+type UserPatch struct {
+	DisplayName *string
+	AvatarURL   *string
+}
+
 // SkillRepository はスキルツリーの取得。行を返すだけで、組み立ては service が行う。
 type SkillRepository interface {
 	ListSkills(ctx context.Context) ([]domain.Skill, error)
@@ -29,6 +36,12 @@ type SkillRepository interface {
 type UserRepository interface {
 	FindUserByExternalID(ctx context.Context, externalID string) (domain.User, domain.Progress, error)
 	InsertUser(ctx context.Context, externalID, displayName string, avatarURL *string) (domain.User, domain.Progress, error)
+	UpdateUser(
+		ctx context.Context,
+		externalID string,
+		displayName *string,
+		avatarURL *string,
+	) (domain.User, error)
 }
 
 // QuestionRepository は published 問題の検索・取得。行を返すだけで、ページングは service が行う。
