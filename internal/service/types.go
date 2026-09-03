@@ -53,18 +53,6 @@ type AdminQuestionList struct {
 	NextCursor *string                       `json:"next_cursor"`
 }
 
-// ReviewQueueParams は GET /v1/admin/review-queue のクエリ。
-type ReviewQueueParams struct {
-	Cursor string
-	Limit  int
-}
-
-// ReviewQueueList は未レビュー問題一覧のレスポンス。
-type ReviewQueueList struct {
-	Items      []domain.ReviewQueueItem `json:"items"`
-	NextCursor *string                  `json:"next_cursor"`
-}
-
 // SubmitAttemptInput は回答送信の入力。DurationMS は未指定なら nil。
 type SubmitAttemptInput struct {
 	SelectedKeys []string

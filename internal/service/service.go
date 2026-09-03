@@ -10,7 +10,6 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
 )
@@ -61,11 +60,6 @@ type QuestionRepository interface {
 // AdminQuestionRepository は status を問わない管理者向け問題検索。
 type AdminQuestionRepository interface {
 	SearchAdminQuestions(ctx context.Context, params domain.AdminQuestionSearch) ([]domain.AdminQuestionSummary, error)
-}
-
-// ReviewQueueRepository は未レビュー問題のキューを取得する。
-type ReviewQueueRepository interface {
-	ListReviewQueue(ctx context.Context, cursorQueuedAt *time.Time, cursorID string, limit int) ([]domain.ReviewQueueItem, error)
 }
 
 // AttemptRepository は回答と、それに伴う全ての進捗更新を1トランザクションで記録する。

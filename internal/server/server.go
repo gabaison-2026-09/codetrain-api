@@ -63,7 +63,6 @@ func New(cfg config.Config, h *handler.Handler, auth echo.MiddlewareFunc) *echo.
 	// /v1/admin/* は認証に加えてレビュアー権限を要求する。
 	admin := v1.Group("/admin", auth, middleware.RequireReviewer(cfg))
 	admin.GET("/questions", h.AdminListQuestions)
-	admin.GET("/review-queue", h.AdminReviewQueue)
 
 	return e
 }
