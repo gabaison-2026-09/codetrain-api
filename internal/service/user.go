@@ -19,11 +19,17 @@ func NewUser(repo UserRepository) *User {
 }
 
 // Me は認証済みユーザーの sub（external_id）からユーザーと進捗を返す。
+// email が context に存在し、かつユーザーの email が未設定の場合はバックフィルする。
 // 該当ユーザーがいない場合は ErrUserNotFound を返す。
-func (s *User) Me(ctx context.Context, externalID string) (UserWithProgress, error) {
+func (s *User) Me(ctx context.Context, externalID string, email string) (UserWithProgress, error) {
 	user, progress, err := s.resolveUser(ctx, externalID)
 	if err != nil {
 		return UserWithProgress{}, err
+	}
+	if email != "" && user.Email == "" {
+		if bfErr := s.repo.BackfillEmail(ctx, externalID, email); bfErr == nil {
+			user.Email = email
+		}
 	}
 	return UserWithProgress{User: user, Progress: progress}, nil
 }
@@ -32,7 +38,7 @@ func (s *User) Me(ctx context.Context, externalID string) (UserWithProgress, err
 // app_user と user_progress を作成し、GET /v1/me と同形を返す。
 // 既に同一 external_id が存在する場合は ErrUserAlreadyProvisioned を返す。
 func (s *User) Create(ctx context.Context, externalID string, in CreateUserInput) (UserWithProgress, error) {
-	user, progress, err := s.repo.InsertUser(ctx, externalID, in.DisplayName, in.AvatarURL)
+	user, progress, err := s.repo.InsertUser(ctx, externalID, in.DisplayName, in.Email, in.AvatarURL)
 	if errors.Is(err, repository.ErrAlreadyExists) {
 		return UserWithProgress{}, ErrUserAlreadyProvisioned
 	}

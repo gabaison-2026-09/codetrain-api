@@ -25,7 +25,7 @@ type SkillLister interface {
 }
 
 type UserFinder interface {
-	Me(ctx context.Context, externalID string) (service.UserWithProgress, error)
+	Me(ctx context.Context, externalID string, email string) (service.UserWithProgress, error)
 	Create(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
 	Update(
 		ctx context.Context,

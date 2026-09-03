@@ -26,7 +26,7 @@ func (h *Handler) Me(c echo.Context) error {
 		return apperr.Unauthorized("認証が必要です")
 	}
 
-	me, err := h.users.Me(c.Request().Context(), sub)
+	me, err := h.users.Me(c.Request().Context(), sub, emailFromCtx(c))
 	if errors.Is(err, service.ErrUserNotFound) {
 		// dev モードでは存在しない ID を渡せてしまうため、404 で明示的に返す。
 		return apperr.New(apperr.CodeUserNotFound, http.StatusNotFound, "ユーザーが見つかりません: "+sub)
@@ -61,6 +61,7 @@ func (h *Handler) CreateMe(c echo.Context) error {
 
 	in := service.CreateUserInput{
 		DisplayName: displayName,
+		Email:       emailPtrFromCtx(c),
 		AvatarURL:   normalizeOptionalString(req.AvatarURL),
 	}
 	me, err := h.users.Create(c.Request().Context(), sub, in)
@@ -138,4 +139,17 @@ func validAvatarURL(value string) bool {
 
 	return (parsed.Scheme == "http" || parsed.Scheme == "https") &&
 		parsed.Host != ""
+}
+
+func emailFromCtx(c echo.Context) string {
+	email, _ := middleware.Email(c)
+	return email
+}
+
+func emailPtrFromCtx(c echo.Context) *string {
+	email, ok := middleware.Email(c)
+	if !ok {
+		return nil
+	}
+	return &email
 }

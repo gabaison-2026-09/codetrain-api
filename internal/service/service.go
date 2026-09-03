@@ -41,13 +41,14 @@ type UserLookupRepository interface {
 // UserRepository はユーザーと進捗の取得・作成。
 type UserRepository interface {
 	UserLookupRepository
-	InsertUser(ctx context.Context, externalID, displayName string, avatarURL *string) (domain.User, domain.Progress, error)
+	InsertUser(ctx context.Context, externalID, displayName string, email *string, avatarURL *string) (domain.User, domain.Progress, error)
 	UpdateUser(
 		ctx context.Context,
 		externalID string,
 		displayName *string,
 		avatarURL *string,
 	) (domain.User, error)
+	BackfillEmail(ctx context.Context, externalID, email string) error
 }
 
 // QuestionRepository は published 問題の検索・取得。行を返すだけで、ページングは service が行う。

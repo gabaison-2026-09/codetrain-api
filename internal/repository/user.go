@@ -52,7 +52,7 @@ func (p *Postgres) FindUserByExternalID(ctx context.Context, externalID string) 
 // InsertUser は app_user と user_progress（初期値）を同一トランザクションで作成し、
 // GET /v1/me 相当の内容を返す。
 // external_id の UNIQUE 違反は ErrAlreadyExists に翻訳する。
-func (p *Postgres) InsertUser(ctx context.Context, externalID, displayName string, avatarURL *string) (domain.User, domain.Progress, error) {
+func (p *Postgres) InsertUser(ctx context.Context, externalID, displayName string, email *string, avatarURL *string) (domain.User, domain.Progress, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return domain.User{}, domain.Progress{}, err
@@ -60,21 +60,21 @@ func (p *Postgres) InsertUser(ctx context.Context, externalID, displayName strin
 	defer tx.Rollback(ctx) //nolint:errcheck // Commit 成功後は no-op
 
 	var user domain.User
-	var email *string
+	var scannedEmail *string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO app_user (external_id, display_name, avatar_url)
-		VALUES ($1, $2, $3)
+		INSERT INTO app_user (external_id, display_name, email, avatar_url)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, external_id, display_name, email, created_at`,
-		externalID, displayName, avatarURL).
-		Scan(&user.ID, &user.ExternalID, &user.DisplayName, &email, &user.CreatedAt)
+		externalID, displayName, email, avatarURL).
+		Scan(&user.ID, &user.ExternalID, &user.DisplayName, &scannedEmail, &user.CreatedAt)
 	if isUniqueViolation(err) {
 		return domain.User{}, domain.Progress{}, ErrAlreadyExists
 	}
 	if err != nil {
 		return domain.User{}, domain.Progress{}, err
 	}
-	if email != nil {
-		user.Email = *email
+	if scannedEmail != nil {
+		user.Email = *scannedEmail
 	}
 
 	// 初期値: xp 0 / level 1 / streak 0 / hearts 5（B-3 確定まで固定）
@@ -151,4 +151,15 @@ func (p *Postgres) UpdateUser(
 	}
 
 	return user, nil
+}
+
+// BackfillEmail は email が NULL のユーザーに email を埋める。
+// 既に email が設定済みの場合は上書きしない。
+func (p *Postgres) BackfillEmail(ctx context.Context, externalID, email string) error {
+	_, err := p.pool.Exec(ctx, `
+		UPDATE app_user
+		   SET email = $2, updated_at = now()
+		 WHERE external_id = $1 AND email IS NULL`,
+		externalID, email)
+	return err
 }
