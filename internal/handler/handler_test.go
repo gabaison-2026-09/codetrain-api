@@ -147,7 +147,12 @@ func TestListSkills(t *testing.T) {
 //	認証済みでなければ 401、ユーザーがいなければ 404、それ以外の失敗は 500。
 func TestMe(t *testing.T) {
 	okUser := service.UserWithProgress{
-		User:     domain.User{ID: "u1", ExternalID: "seed-user-01", DisplayName: "テスト"},
+		User: domain.User{
+			ID:          "u1",
+			ExternalID:  "seed-user-01",
+			DisplayName: "テスト",
+			AvatarURL:   "https://example.com/avatar.jpg",
+		},
 		Progress: domain.Progress{XP: 120},
 	}
 
@@ -233,6 +238,13 @@ func TestMe(t *testing.T) {
 			}
 			if body.User.ExternalID != "seed-user-01" || body.Progress.XP != 120 {
 				t.Errorf("body = %+v, want %+v", body, okUser)
+			}
+			if body.User.AvatarURL != "https://example.com/avatar.jpg" {
+				t.Errorf(
+					"body.User.AvatarURL = %q, want %q",
+					body.User.AvatarURL,
+					"https://example.com/avatar.jpg",
+				)
 			}
 		})
 	}

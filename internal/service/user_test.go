@@ -30,7 +30,12 @@ func TestUserMe(t *testing.T) {
 		repo := fakeUserRepo{
 			find: func(_ context.Context, externalID string) (domain.User, domain.Progress, error) {
 				gotExternalID = externalID
-				return domain.User{ID: "u1", ExternalID: externalID, DisplayName: "テスト"},
+				return domain.User{
+					ID:          "u1",
+					ExternalID:  externalID,
+					DisplayName: "テスト",
+					AvatarURL:   "https://example.com/avatar.jpg",
+				},
 					domain.Progress{XP: 120, StreakDays: 3, Hearts: 5},
 					nil
 			},
@@ -45,6 +50,13 @@ func TestUserMe(t *testing.T) {
 		}
 		if got.User.DisplayName != "テスト" {
 			t.Errorf("User.DisplayName = %q, want %q", got.User.DisplayName, "テスト")
+		}
+		if got.User.AvatarURL != "https://example.com/avatar.jpg" {
+			t.Errorf(
+				"User.AvatarURL = %q, want %q",
+				got.User.AvatarURL,
+				"https://example.com/avatar.jpg",
+			)
 		}
 		if got.Progress.XP != 120 {
 			t.Errorf("Progress.XP = %d, want 120", got.Progress.XP)
