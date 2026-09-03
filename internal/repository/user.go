@@ -48,6 +48,7 @@ func (p *Postgres) FindUserByExternalID(ctx context.Context, externalID string) 
 	return user, progress, nil
 }
 
+
 // InsertUser は app_user と user_progress（初期値）を同一トランザクションで作成し、
 // GET /v1/me 相当の内容を返す。
 // external_id の UNIQUE 違反は ErrAlreadyExists に翻訳する。
@@ -103,4 +104,51 @@ func (p *Postgres) InsertUser(ctx context.Context, externalID, displayName strin
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// UpdateUser は指定されたフィールドだけユーザープロフィールを更新する。
+// 該当ユーザーがいない場合は ErrNotFound を返す。
+func (p *Postgres) UpdateUser(
+	ctx context.Context,
+	externalID string,
+	displayName *string,
+	avatarURL *string,
+) (domain.User, error) {
+	var user domain.User
+	var email *string
+	var updatedAvatarURL *string
+
+	err := p.pool.QueryRow(ctx, `
+		UPDATE app_user
+		   SET display_name = COALESCE($2, display_name),
+		       avatar_url = COALESCE($3, avatar_url),
+		       updated_at = now()
+		 WHERE external_id = $1
+		 RETURNING id, external_id, display_name, email, avatar_url, created_at`,
+		externalID,
+		displayName,
+		avatarURL,
+	).Scan(
+		&user.ID,
+		&user.ExternalID,
+		&user.DisplayName,
+		&email,
+		&updatedAvatarURL,
+		&user.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.User{}, ErrNotFound
+	}
+	if err != nil {
+		return domain.User{}, err
+	}
+
+	if email != nil {
+		user.Email = *email
+	}
+	if updatedAvatarURL != nil {
+		user.AvatarURL = *updatedAvatarURL
+	}
+
+	return user, nil
 }

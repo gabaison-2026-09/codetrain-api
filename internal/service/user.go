@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
 	"github.com/gabaison-2026-09/codetrain-api/internal/repository"
 )
 
@@ -36,4 +37,36 @@ func (s *User) Create(ctx context.Context, externalID string, in CreateUserInput
 		return UserWithProgress{}, err
 	}
 	return UserWithProgress{User: user, Progress: progress}, nil
+}
+
+// Update は認証済みユーザーのプロフィールを部分更新する。
+// patchの両フィールドがnilなら更新せず、現在のユーザーを返す。
+func (s *User) Update(
+	ctx context.Context,
+	externalID string,
+	patch UserPatch,
+) (domain.User, error) {
+	user, _, err := s.resolveUser(ctx, externalID)
+	if err != nil {
+		return domain.User{}, err
+	}
+
+	if patch.DisplayName == nil && patch.AvatarURL == nil {
+		return user, nil
+	}
+
+	updated, err := s.repo.UpdateUser(
+		ctx,
+		externalID,
+		patch.DisplayName,
+		patch.AvatarURL,
+	)
+	if errors.Is(err, repository.ErrNotFound) {
+		return domain.User{}, ErrUserNotFound
+	}
+	if err != nil {
+		return domain.User{}, err
+	}
+
+	return updated, nil
 }
