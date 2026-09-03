@@ -69,6 +69,11 @@ type AdminQuestionDetailRepository interface {
 	ListReviewHistory(ctx context.Context, questionID string) ([]domain.ReviewEntry, error)
 }
 
+// AdminQuestionUpdateRepository は管理者向け問題の部分更新を行う。
+type AdminQuestionUpdateRepository interface {
+	UpdateQuestion(ctx context.Context, questionID string, patch domain.AdminQuestionPatch) (domain.AdminQuestion, error)
+}
+
 // ReviewQueueRepository は未レビュー問題のキューを取得する。
 type ReviewQueueRepository interface {
 	ListReviewQueue(ctx context.Context, cursorQueuedAt *time.Time, cursorID string, limit int) ([]domain.ReviewQueueItem, error)
