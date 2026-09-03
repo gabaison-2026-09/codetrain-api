@@ -13,6 +13,9 @@ var ErrUserNotFound = errors.New("ユーザーが見つかりません")
 // handler はこれだけを見て 404 QUESTION_NOT_FOUND を返す。
 var ErrQuestionNotFound = errors.New("問題が見つかりません")
 
+// ErrReviewAlreadyDecided は問題に未判定のレビュー行が存在しないことを表す。
+var ErrReviewAlreadyDecided = errors.New("レビューは既に判定済みです")
+
 // ErrUserAlreadyProvisioned は同じ external_id の app_user が既に存在することを表す。
 // repository.ErrAlreadyExists をユースケース語彙に翻訳したもので、
 // handler はこれだけを見て 409 USER_ALREADY_PROVISIONED を返す。

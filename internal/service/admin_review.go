@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
 
 	"github.com/gabaison-2026-09/codetrain-api/internal/apperr"
 	"github.com/gabaison-2026-09/codetrain-api/internal/paging"
+	"github.com/gabaison-2026-09/codetrain-api/internal/repository"
 )
 
 type reviewQueueCursor struct {
@@ -22,6 +24,46 @@ type ReviewQueue struct {
 
 func NewReviewQueue(reviews ReviewQueueRepository) *ReviewQueue {
 	return &ReviewQueue{reviews: reviews}
+}
+
+// AdminReview はレビュー判定を記録するユースケース。
+type AdminReview struct {
+	reviews AdminReviewRepository
+	users   UserLookupRepository
+}
+
+func NewAdminReview(reviews AdminReviewRepository, users UserLookupRepository) *AdminReview {
+	return &AdminReview{reviews: reviews, users: users}
+}
+
+// Decide はレビュアーの sub を app_user.id に解決して判定を記録する。
+func (s *AdminReview) Decide(
+	ctx context.Context,
+	reviewerSub, questionID string,
+	in AdminReviewInput,
+) (domain.ReviewResult, error) {
+	switch in.Decision {
+	case domain.ReviewDecisionApproved, domain.ReviewDecisionRejected, domain.ReviewDecisionNeedsEdit:
+	default:
+		return domain.ReviewResult{}, apperr.Validation("decision が不正です")
+	}
+
+	reviewerID, err := (userResolver{repo: s.users}).resolveUserID(ctx, reviewerSub)
+	if err != nil {
+		return domain.ReviewResult{}, err
+	}
+
+	result, err := s.reviews.DecideReview(ctx, reviewerID, questionID, in.Decision, in.Notes)
+	if errors.Is(err, repository.ErrNotFound) {
+		return domain.ReviewResult{}, ErrQuestionNotFound
+	}
+	if errors.Is(err, repository.ErrAlreadyExists) {
+		return domain.ReviewResult{}, ErrReviewAlreadyDecided
+	}
+	if err != nil {
+		return domain.ReviewResult{}, err
+	}
+	return result, nil
 }
 
 // List は queued_at 昇順で未レビュー問題を1頁返す。

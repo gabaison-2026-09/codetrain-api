@@ -53,6 +53,7 @@ func run() error {
 	}
 
 	adminQuestions := service.NewAdminQuestionWithUpdater(repo, repo, repo)
+	adminReview := service.NewAdminReview(repo, repo)
 	h := handler.New(handler.Deps{
 		Health:       service.NewHealth(repo),
 		Skills:       service.NewSkill(repo),
@@ -64,6 +65,7 @@ func run() error {
 		AdminGetter:  adminQuestions,
 		AdminUpdater: adminQuestions,
 		ReviewQueue:  service.NewReviewQueue(repo),
+		Reviewer:     adminReview,
 		SRS:          service.NewSRS(repo, repo),
 		Calendar:     service.NewCalendar(repo, repo),
 		Attempts:     service.NewAttempt(repo, repo, repo),

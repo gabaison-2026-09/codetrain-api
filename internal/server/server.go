@@ -65,6 +65,7 @@ func New(cfg config.Config, h *handler.Handler, auth echo.MiddlewareFunc) *echo.
 	admin.GET("/questions", h.AdminListQuestions)
 	admin.GET("/questions/:id", h.AdminGetQuestion)
 	admin.PATCH("/questions/:id", h.AdminUpdateQuestion)
+	admin.POST("/questions/:id/review", h.AdminReview)
 	admin.GET("/review-queue", h.AdminReviewQueue)
 
 	return e

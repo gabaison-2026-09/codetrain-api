@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
@@ -9,6 +10,65 @@ import (
 
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
 )
+
+// DecideReview はレビュー判定と問題ステータス更新を同一トランザクションで行う。
+func (p *Postgres) DecideReview(
+	ctx context.Context,
+	reviewerID, questionID string,
+	decision domain.ReviewDecision,
+	notes string,
+) (domain.ReviewResult, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return domain.ReviewResult{}, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // Commit 成功後は no-op
+
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM question WHERE id = $1)`, questionID).Scan(&exists); err != nil {
+		return domain.ReviewResult{}, err
+	}
+	if !exists {
+		return domain.ReviewResult{}, ErrNotFound
+	}
+
+	var result domain.ReviewResult
+	err = tx.QueryRow(ctx, `
+UPDATE review_queue
+   SET decision = $1, notes = $2, reviewer_id = $3, reviewed_at = now(), updated_at = now()
+ WHERE question_id = $4 AND decision IS NULL
+RETURNING id, reviewed_at`,
+		decision, notes, reviewerID, questionID,
+	).Scan(&result.ID, &result.ReviewedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ReviewResult{}, ErrAlreadyExists
+	}
+	if err != nil {
+		return domain.ReviewResult{}, err
+	}
+
+	if decision != domain.ReviewDecisionNeedsEdit {
+		status := domain.QuestionStatusPublished
+		if decision == domain.ReviewDecisionRejected {
+			status = domain.QuestionStatusRejected
+		}
+		if _, err := tx.Exec(ctx, `
+UPDATE question SET status = $1, updated_at = now() WHERE id = $2`,
+			status, questionID,
+		); err != nil {
+			return domain.ReviewResult{}, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.ReviewResult{}, err
+	}
+	result.QuestionID = questionID
+	result.ReviewerID = reviewerID
+	result.Decision = decision
+	result.Notes = notes
+	return result, nil
+}
 
 // ListReviewQueue は未レビュー問題を queued_at 昇順で取得する。
 // Limit+1 件返す（次頁判定は service）。
