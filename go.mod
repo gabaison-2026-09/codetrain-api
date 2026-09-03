@@ -3,7 +3,7 @@ module github.com/gabaison-2026-09/codetrain-api
 go 1.27
 
 require (
-	github.com/gabaison-2026-09/codetrain-core v0.0.0
+	github.com/gabaison-2026-09/codetrain-core v0.1.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/labstack/echo/v4 v4.13.4
@@ -25,8 +25,3 @@ require (
 	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 )
-
-// codetrain-core はまだ GitHub に push されていないため、隣のチェックアウトを指す。
-// LOCAL_DEV.md §10.1 のとおり、core にタグを打って公開した時点でこの replace を外し、
-// GOPRIVATE 経由のバージョン固定参照に切り替える。
-replace github.com/gabaison-2026-09/codetrain-core => ../codetrain-core
