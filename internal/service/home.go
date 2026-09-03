@@ -3,10 +3,13 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/gabaison-2026-09/codetrain-api/internal/repository"
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
 )
+
+var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
 
 var ErrNoAvailableQuestion = errors.New("利用可能な問題がありません")
 
@@ -52,7 +55,8 @@ func (s *HomeService) Get(ctx context.Context, externalID string) (domain.Home, 
 	if tasks == nil {
 		tasks = []domain.HomeTask{}
 	}
-	return domain.Home{Tasks: tasks, Progress: progress}, nil
+	today := time.Now().In(jst).Format("2006-01-02")
+	return domain.Home{ActivityDate: today, Tasks: tasks, Progress: progress}, nil
 }
 
 func (s *HomeService) repoUser(ctx context.Context, externalID string) (domain.User, domain.Progress, error) {

@@ -3,7 +3,7 @@ module github.com/gabaison-2026-09/codetrain-api
 go 1.27
 
 require (
-	github.com/gabaison-2026-09/codetrain-core v0.1.0
+	github.com/gabaison-2026-09/codetrain-core v0.2.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/labstack/echo/v4 v4.13.4
