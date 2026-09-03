@@ -46,3 +46,50 @@ func (p *Postgres) FindUserByExternalID(ctx context.Context, externalID string) 
 	progress.LastStudiedOn = lastStudied
 	return user, progress, nil
 }
+
+// UpdateUser は指定されたフィールドだけユーザープロフィールを更新する。
+// 該当ユーザーがいない場合は ErrNotFound を返す。
+func (p *Postgres) UpdateUser(
+	ctx context.Context,
+	externalID string,
+	displayName *string,
+	avatarURL *string,
+) (domain.User, error) {
+	var user domain.User
+	var email *string
+	var updatedAvatarURL *string
+
+	err := p.pool.QueryRow(ctx, `
+		UPDATE app_user
+		   SET display_name = COALESCE($2, display_name),
+		       avatar_url = COALESCE($3, avatar_url),
+		       updated_at = now()
+		 WHERE external_id = $1
+		 RETURNING id, external_id, display_name, email, avatar_url, created_at`,
+		externalID,
+		displayName,
+		avatarURL,
+	).Scan(
+		&user.ID,
+		&user.ExternalID,
+		&user.DisplayName,
+		&email,
+		&updatedAvatarURL,
+		&user.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.User{}, ErrNotFound
+	}
+	if err != nil {
+		return domain.User{}, err
+	}
+
+	if email != nil {
+		user.Email = *email
+	}
+	if updatedAvatarURL != nil {
+		user.AvatarURL = *updatedAvatarURL
+	}
+
+	return user, nil
+}
