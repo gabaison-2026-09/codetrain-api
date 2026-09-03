@@ -29,3 +29,8 @@ type SkillRepository interface {
 type UserRepository interface {
 	FindUserByExternalID(ctx context.Context, externalID string) (domain.User, domain.Progress, error)
 }
+
+// QuestionRepository は published 問題の検索。行を返すだけで、ページングは service が行う。
+type QuestionRepository interface {
+	SearchQuestions(ctx context.Context, userID string, q domain.QuestionSearch) ([]domain.QuestionSummary, error)
+}

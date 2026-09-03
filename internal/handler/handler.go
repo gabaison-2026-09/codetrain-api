@@ -3,9 +3,6 @@
 // この層の責務は HTTP の関心だけ —— リクエストからの値の取り出し、
 // service 層の呼び出し、エラーからステータスコードへの変換、JSON 化。
 // ビジネスロジックは service 層に置き、ここには書かない。
-//
-// 今回のスコープはローカル環境が立ち上がったことを確認できる最小限
-// （/healthz・/v1/skills・/v1/me）。MVP ループの実装は Phase 2 で追加する。
 package handler
 
 import (
@@ -31,20 +28,26 @@ type UserFinder interface {
 	Me(ctx context.Context, externalID string) (service.UserWithProgress, error)
 }
 
+type QuestionLister interface {
+	List(ctx context.Context, externalID string, params service.QuestionSearchParams) (service.QuestionList, error)
+}
+
 type Handler struct {
-	health HealthChecker
-	skills SkillLister
-	users  UserFinder
+	health    HealthChecker
+	skills    SkillLister
+	users     UserFinder
+	questions QuestionLister
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
 // 足すだけで済み、既存の New 呼び出し（テスト含む）を壊さない。
 type Deps struct {
-	Health HealthChecker
-	Skills SkillLister
-	Users  UserFinder
+	Health    HealthChecker
+	Skills    SkillLister
+	Users     UserFinder
+	Questions QuestionLister
 }
 
 func New(deps Deps) *Handler {
-	return &Handler{health: deps.Health, skills: deps.Skills, users: deps.Users}
+	return &Handler{health: deps.Health, skills: deps.Skills, users: deps.Users, questions: deps.Questions}
 }
