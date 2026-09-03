@@ -8,6 +8,13 @@ type UserWithProgress struct {
 	Progress domain.Progress `json:"progress"`
 }
 
+// CreateUserInput は POST /v1/me の作成内容。
+// DisplayName は必須。AvatarURL は任意（未指定なら nil）。
+type CreateUserInput struct {
+	DisplayName string
+	AvatarURL   *string
+}
+
 // QuestionSearchParams は GET /v1/questions のクエリ。handler が型変換・検証したあと
 // service に渡す。Cursor は未デコードの文字列（空なら先頭頁）。
 type QuestionSearchParams struct {

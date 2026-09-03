@@ -26,6 +26,7 @@ type SkillLister interface {
 
 type UserFinder interface {
 	Me(ctx context.Context, externalID string) (service.UserWithProgress, error)
+	Create(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
 }
 
 type QuestionLister interface {

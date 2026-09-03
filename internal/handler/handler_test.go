@@ -33,21 +33,42 @@ type fakeSkills struct {
 func (f fakeSkills) List(ctx context.Context) ([]domain.Skill, error) { return f.list(ctx) }
 
 type fakeUsers struct {
-	me func(ctx context.Context, externalID string) (service.UserWithProgress, error)
+	me     func(ctx context.Context, externalID string) (service.UserWithProgress, error)
+	create func(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
 }
 
 func (f fakeUsers) Me(ctx context.Context, externalID string) (service.UserWithProgress, error) {
 	return f.me(ctx, externalID)
 }
 
+func (f fakeUsers) Create(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error) {
+	return f.create(ctx, externalID, in)
+}
+
 // serve はハンドラを1回呼び、Echo のエラーハンドラを通したうえで結果を返す。
 // sub が空でなければ認証済みのコンテキストとして組み立てる。
 func serve(t *testing.T, h echo.HandlerFunc, method, path, sub string) *httptest.ResponseRecorder {
 	t.Helper()
+	return serveBody(t, h, method, path, sub, "")
+}
+
+// serveBody は JSON ボディ付きでハンドラを1回呼ぶ。body が空なら Content-Type は付けない。
+func serveBody(t *testing.T, h echo.HandlerFunc, method, path, sub, body string) *httptest.ResponseRecorder {
+	t.Helper()
 
 	e := echo.New()
 	e.HTTPErrorHandler = apperr.HTTPErrorHandler
-	req := httptest.NewRequest(method, path, nil)
+	var r *strings.Reader
+	if body != "" {
+		r = strings.NewReader(body)
+	}
+	var req *http.Request
+	if r != nil {
+		req = httptest.NewRequest(method, path, r)
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	} else {
+		req = httptest.NewRequest(method, path, nil)
+	}
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	if sub != "" {
@@ -253,5 +274,122 @@ func TestMeUsesSubjectAsExternalID(t *testing.T) {
 
 	if got != "seed-user-02" {
 		t.Errorf("service に渡した external_id = %q, want %q", got, "seed-user-02")
+	}
+}
+
+// CreateMe の契約:
+//
+//	認証済みでなければ 401、display_name 欠落・空は 400、
+//	既存ユーザーは 409、成功は 201。
+func TestCreateMe(t *testing.T) {
+	okUser := service.UserWithProgress{
+		User:     domain.User{ID: "u1", ExternalID: "brand-new-user", DisplayName: "新規太郎"},
+		Progress: domain.Progress{XP: 0, Level: 1, Hearts: 5},
+	}
+
+	tests := []struct {
+		name       string
+		sub        string
+		body       string
+		create     func(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
+		wantStatus int
+		wantCode   string
+	}{
+		{
+			name: "作成成功は 201",
+			sub:  "brand-new-user",
+			body: `{"display_name":"新規太郎"}`,
+			create: func(_ context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error) {
+				if externalID != "brand-new-user" || in.DisplayName != "新規太郎" {
+					t.Errorf("Create args = (%q, %+v)", externalID, in)
+				}
+				return okUser, nil
+			},
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:       "sub が無ければ 401",
+			sub:        "",
+			body:       `{"display_name":"新規太郎"}`,
+			create:     func(context.Context, string, service.CreateUserInput) (service.UserWithProgress, error) { return okUser, nil },
+			wantStatus: http.StatusUnauthorized,
+			wantCode:   apperr.CodeUnauthorized,
+		},
+		{
+			name:       "display_name 欠落は 400",
+			sub:        "brand-new-user",
+			body:       `{}`,
+			create:     func(context.Context, string, service.CreateUserInput) (service.UserWithProgress, error) { return okUser, nil },
+			wantStatus: http.StatusBadRequest,
+			wantCode:   apperr.CodeValidationError,
+		},
+		{
+			name:       "display_name が空は 400",
+			sub:        "brand-new-user",
+			body:       `{"display_name":"  "}`,
+			create:     func(context.Context, string, service.CreateUserInput) (service.UserWithProgress, error) { return okUser, nil },
+			wantStatus: http.StatusBadRequest,
+			wantCode:   apperr.CodeValidationError,
+		},
+		{
+			name: "既に作成済みなら 409",
+			sub:  "seed-user-01",
+			body: `{"display_name":"既存"}`,
+			create: func(context.Context, string, service.CreateUserInput) (service.UserWithProgress, error) {
+				return service.UserWithProgress{}, service.ErrUserAlreadyProvisioned
+			},
+			wantStatus: http.StatusConflict,
+			wantCode:   apperr.CodeUserAlreadyProvisioned,
+		},
+		{
+			name: "その他の失敗は 500",
+			sub:  "brand-new-user",
+			body: `{"display_name":"新規太郎"}`,
+			create: func(context.Context, string, service.CreateUserInput) (service.UserWithProgress, error) {
+				return service.UserWithProgress{}, errors.New("DB 障害")
+			},
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   apperr.CodeInternalError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := New(Deps{Users: fakeUsers{create: tt.create}})
+			rec := serveBody(t, h.CreateMe, http.MethodPost, "/v1/me", tt.sub, tt.body)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d (body=%s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if tt.wantStatus != http.StatusCreated {
+				if tt.wantCode == "" {
+					return
+				}
+				var env struct {
+					Error struct {
+						Status  int    `json:"status"`
+						Code    string `json:"code"`
+						Message string `json:"message"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+					t.Fatalf("エンベロープの解析に失敗: %v (body=%s)", err, rec.Body.String())
+				}
+				if env.Error.Code != tt.wantCode {
+					t.Errorf("error.code = %q, want %q", env.Error.Code, tt.wantCode)
+				}
+				if tt.wantStatus == http.StatusInternalServerError && strings.Contains(env.Error.Message, "DB 障害") {
+					t.Errorf("500 応答に原因文字列が漏れている: %q", env.Error.Message)
+				}
+				return
+			}
+			var body service.UserWithProgress
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("レスポンスの解析に失敗: %v (body=%s)", err, rec.Body.String())
+			}
+			if body.User.DisplayName != "新規太郎" || body.Progress.Hearts != 5 {
+				t.Errorf("body = %+v, want %+v", body, okUser)
+			}
+		})
 	}
 }
