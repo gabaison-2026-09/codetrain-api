@@ -75,7 +75,7 @@ func TestHealth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := New(fakeHealth{check: func(context.Context) error { return tt.pingErr }}, nil, nil)
+			h := New(Deps{Health: fakeHealth{check: func(context.Context) error { return tt.pingErr }}})
 			rec := serve(t, h.Health, http.MethodGet, "/healthz", "")
 
 			if rec.Code != tt.wantStatus {
@@ -98,11 +98,11 @@ func TestHealth(t *testing.T) {
 // ListSkills の契約: 200 で {"skills":[...]}。service が失敗したら 500。
 func TestListSkills(t *testing.T) {
 	t.Run("スキルを返す", func(t *testing.T) {
-		h := New(nil, fakeSkills{
+		h := New(Deps{Skills: fakeSkills{
 			list: func(context.Context) ([]domain.Skill, error) {
 				return []domain.Skill{{ID: "s1", Slug: "go", Name: "Go"}}, nil
 			},
-		}, nil)
+		}})
 		rec := serve(t, h.ListSkills, http.MethodGet, "/v1/skills", "")
 
 		if rec.Code != http.StatusOK {
@@ -120,9 +120,9 @@ func TestListSkills(t *testing.T) {
 	})
 
 	t.Run("スキルが0件でも skills キーは配列", func(t *testing.T) {
-		h := New(nil, fakeSkills{
+		h := New(Deps{Skills: fakeSkills{
 			list: func(context.Context) ([]domain.Skill, error) { return []domain.Skill{}, nil },
-		}, nil)
+		}})
 		rec := serve(t, h.ListSkills, http.MethodGet, "/v1/skills", "")
 
 		if got := rec.Body.String(); got != "{\"skills\":[]}\n" {
@@ -131,9 +131,9 @@ func TestListSkills(t *testing.T) {
 	})
 
 	t.Run("service が失敗したら 500", func(t *testing.T) {
-		h := New(nil, fakeSkills{
+		h := New(Deps{Skills: fakeSkills{
 			list: func(context.Context) ([]domain.Skill, error) { return nil, errors.New("DB 障害") },
-		}, nil)
+		}})
 		rec := serve(t, h.ListSkills, http.MethodGet, "/v1/skills", "")
 
 		if rec.Code != http.StatusInternalServerError {
@@ -193,7 +193,7 @@ func TestMe(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := New(nil, nil, fakeUsers{me: tt.me})
+			h := New(Deps{Users: fakeUsers{me: tt.me}})
 			rec := serve(t, h.Me, http.MethodGet, "/v1/me", tt.sub)
 
 			if rec.Code != tt.wantStatus {
@@ -242,12 +242,12 @@ func TestMe(t *testing.T) {
 // Subject が読める形でしか Me は service を呼ばない。
 func TestMeUsesSubjectAsExternalID(t *testing.T) {
 	var got string
-	h := New(nil, nil, fakeUsers{
+	h := New(Deps{Users: fakeUsers{
 		me: func(_ context.Context, externalID string) (service.UserWithProgress, error) {
 			got = externalID
 			return service.UserWithProgress{}, nil
 		},
-	})
+	}})
 
 	serve(t, h.Me, http.MethodGet, "/v1/me", "seed-user-02")
 
