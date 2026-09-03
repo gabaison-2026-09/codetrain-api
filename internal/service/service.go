@@ -79,3 +79,10 @@ type CalendarRepository interface {
 	DailyConsumption(ctx context.Context, userID string, from, to string) ([]domain.CalendarDay, error)
 	Streak(ctx context.Context, userID string) (int, *string, error)
 }
+
+type HomeRepository interface {
+	ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error)
+	PickUnansweredPublished(ctx context.Context, userID string, typ domain.QuestionType, language string, difficulty int) (domain.Question, error)
+	UpsertDailyTask(ctx context.Context, userID string, slot domain.TaskConfig, questionID string) error
+	GetTodayHome(ctx context.Context, userID string) ([]domain.HomeTask, error)
+}
