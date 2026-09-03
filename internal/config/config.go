@@ -21,6 +21,7 @@ type Config struct {
 	CognitoUserPoolID  string
 	CognitoClientID    string
 	CORSAllowedOrigins []string
+	ReviewerSubs       []string
 
 	AWSEndpointURL string
 	AWSRegion      string
@@ -36,6 +37,7 @@ func Load() (Config, error) {
 		CognitoUserPoolID:  env("COGNITO_USER_POOL_ID", ""),
 		CognitoClientID:    env("COGNITO_CLIENT_ID", ""),
 		CORSAllowedOrigins: splitAndTrim(env("CORS_ALLOWED_ORIGINS", "")),
+		ReviewerSubs:       splitAndTrim(env("REVIEWER_SUBS", "")),
 		AWSEndpointURL:     env("AWS_ENDPOINT_URL", ""),
 		AWSRegion:          env("AWS_REGION", "ap-northeast-1"),
 		S3Bucket:           env("S3_BUCKET", ""),
