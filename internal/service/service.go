@@ -56,3 +56,8 @@ type QuestionRepository interface {
 type SRSRepository interface {
 	ListDue(ctx context.Context, userID string, limit int) ([]domain.SRSDueItem, error)
 }
+
+// TaskSlotRepository はユーザーのタスクスロット設定を取得する。
+type TaskSlotRepository interface {
+	ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error)
+}

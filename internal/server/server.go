@@ -52,6 +52,7 @@ func New(cfg config.Config, h *handler.Handler, auth echo.MiddlewareFunc) *echo.
 	v1.GET("/questions/:id", h.GetQuestion, auth) // 認証必須
 	v1.GET("/srs/due", h.SRSDue, auth)            // 認証必須
 	v1.PATCH("/me", h.UpdateMe, auth)             // 認証必須
+	v1.GET("/task-slots", h.ListTaskSlots, auth)  // 認証必須
 
 	return e
 }
