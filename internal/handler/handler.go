@@ -37,6 +37,14 @@ type Handler struct {
 	users  UserFinder
 }
 
-func New(health HealthChecker, skills SkillLister, users UserFinder) *Handler {
-	return &Handler{health: health, skills: skills, users: users}
+// Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
+// 足すだけで済み、既存の New 呼び出し（テスト含む）を壊さない。
+type Deps struct {
+	Health HealthChecker
+	Skills SkillLister
+	Users  UserFinder
+}
+
+func New(deps Deps) *Handler {
+	return &Handler{health: deps.Health, skills: deps.Skills, users: deps.Users}
 }

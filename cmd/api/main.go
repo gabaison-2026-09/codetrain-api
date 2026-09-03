@@ -52,11 +52,11 @@ func run() error {
 		return err
 	}
 
-	h := handler.New(
-		service.NewHealth(repo),
-		service.NewSkill(repo),
-		service.NewUser(repo),
-	)
+	h := handler.New(handler.Deps{
+		Health: service.NewHealth(repo),
+		Skills: service.NewSkill(repo),
+		Users:  service.NewUser(repo),
+	})
 
 	e := server.New(cfg, h, auth)
 
