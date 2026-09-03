@@ -51,6 +51,10 @@ type ReviewQueueLister interface {
 	List(ctx context.Context, params service.ReviewQueueParams) (service.ReviewQueueList, error)
 }
 
+type AdminReviewer interface {
+	Decide(ctx context.Context, reviewerSub, questionID string, in service.AdminReviewInput) (domain.ReviewResult, error)
+}
+
 type AttemptSubmitter interface {
 	Submit(ctx context.Context, externalID, questionID string, in service.SubmitAttemptInput) (domain.AttemptResult, error)
 }
@@ -84,6 +88,7 @@ type Handler struct {
 	admin       AdminQuestionLister
 	adminGetter AdminQuestionGetter
 	reviewQueue ReviewQueueLister
+	reviewer    AdminReviewer
 	srs         SRSDueLister
 	taskSlots   TaskSlotLister
 	taskOptions TaskOptionLister
@@ -102,6 +107,7 @@ type Deps struct {
 	Admin       AdminQuestionLister
 	AdminGetter AdminQuestionGetter
 	ReviewQueue ReviewQueueLister
+	Reviewer    AdminReviewer
 	SRS         SRSDueLister
 	TaskSlots   TaskSlotLister
 	TaskOptions TaskOptionLister
@@ -119,6 +125,7 @@ func New(deps Deps) *Handler {
 		admin:       deps.Admin,
 		adminGetter: deps.AdminGetter,
 		reviewQueue: deps.ReviewQueue,
+		reviewer:    deps.Reviewer,
 		srs:         deps.SRS,
 		taskSlots:   deps.TaskSlots,
 		taskOptions: deps.TaskOptions,

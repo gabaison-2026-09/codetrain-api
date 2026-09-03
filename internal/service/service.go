@@ -74,6 +74,11 @@ type ReviewQueueRepository interface {
 	ListReviewQueue(ctx context.Context, cursorQueuedAt *time.Time, cursorID string, limit int) ([]domain.ReviewQueueItem, error)
 }
 
+// AdminReviewRepository はレビュー判定の記録と問題ステータス更新を行う。
+type AdminReviewRepository interface {
+	DecideReview(ctx context.Context, reviewerID, questionID string, decision domain.ReviewDecision, notes string) (domain.ReviewResult, error)
+}
+
 // AttemptRepository は回答と、それに伴う全ての進捗更新を1トランザクションで記録する。
 type AttemptRepository interface {
 	RecordAttempt(ctx context.Context, attempt domain.Attempt, question domain.Question, xpGained int) (domain.AttemptResult, error)
