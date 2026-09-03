@@ -40,7 +40,7 @@ WITH completed_days AS (
   FROM completed_days
 ), latest AS (SELECT max(day) AS day FROM completed_days)
 SELECT COALESCE((SELECT count(*) FROM ranked r, latest l
-  WHERE l.day >= CURRENT_DATE - 1 AND r.grp = (
+  WHERE l.day >= `+jstToday+` - 1 AND r.grp = (
     SELECT grp FROM ranked WHERE day = l.day)), 0)::int,
        (SELECT day::text FROM latest)`, userID).Scan(&days, &last)
 	return days, last, err
