@@ -65,6 +65,7 @@ type SRSRepository interface {
 // TaskSlotRepository はユーザーのタスクスロット設定を取得する。
 type TaskSlotRepository interface {
 	ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error)
+	DeleteUserTask(ctx context.Context, userID string, slotNo int) error
 }
 
 // TaskOptionRepository は認証ユーザーの解決とタスク候補の取得。

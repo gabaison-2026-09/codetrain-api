@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
+
+	"github.com/gabaison-2026-09/codetrain-api/internal/repository"
 )
 
 // TaskSlot はユーザーのタスクスロット設定を扱うユースケース。
@@ -32,6 +35,25 @@ func (s *TaskSlot) ListSlots(ctx context.Context, externalID string) ([]domain.T
 		slots = []domain.TaskConfig{}
 	}
 	return slots, nil
+}
+
+// DeleteSlot は認証ユーザーの指定されたタスクスロットを削除する。
+func (s *TaskSlot) DeleteSlot(ctx context.Context, externalID string, slotNo int) error {
+	if slotNo < 1 || slotNo > 5 {
+		return ErrTaskSlotNoInvalid
+	}
+
+	userID, err := s.resolveUserID(ctx, externalID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.repo.DeleteUserTask(ctx, userID, slotNo); errors.Is(err, repository.ErrNotFound) {
+		return ErrTaskSlotNoInvalid
+	} else if err != nil {
+		return err
+	}
+	return nil
 }
 
 // TaskSlot はタスクスロットの候補を扱うユースケース。
