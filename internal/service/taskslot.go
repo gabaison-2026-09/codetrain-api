@@ -9,7 +9,8 @@ import (
 // TaskSlot はユーザーのタスクスロット設定を扱うユースケース。
 type TaskSlot struct {
 	userResolver
-	repo TaskSlotRepository
+	repo    TaskSlotRepository
+	options TaskOptionRepository
 }
 
 func NewTaskSlot(users UserRepository, repo TaskSlotRepository) *TaskSlot {
@@ -31,4 +32,26 @@ func (s *TaskSlot) ListSlots(ctx context.Context, externalID string) ([]domain.T
 		slots = []domain.TaskConfig{}
 	}
 	return slots, nil
+}
+
+// TaskSlot はタスクスロットの候補を扱うユースケース。
+// List は認証ユーザーの存在を確認してから、選択可能な候補を返す。
+func (s *TaskSlot) List(ctx context.Context, externalID string) ([]domain.TaskOption, error) {
+	if _, err := s.resolveUserID(ctx, externalID); err != nil {
+		return nil, err
+	}
+
+	options, err := s.options.ListTaskOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if options == nil {
+		options = []domain.TaskOption{}
+	}
+	return options, nil
+}
+
+// NewTaskOptions はタスク候補取得用のサービスを作る。
+func NewTaskOptions(repo TaskOptionRepository) *TaskSlot {
+	return &TaskSlot{userResolver: userResolver{repo: repo}, options: repo}
 }

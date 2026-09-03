@@ -47,33 +47,40 @@ type TaskSlotLister interface {
 	ListSlots(ctx context.Context, externalID string) ([]domain.TaskConfig, error)
 }
 
+type TaskOptionLister interface {
+	List(ctx context.Context, externalID string) ([]domain.TaskOption, error)
+}
+
 type Handler struct {
-	health    HealthChecker
-	skills    SkillLister
-	users     UserFinder
-	questions QuestionLister
-	srs       SRSDueLister
-	taskSlots TaskSlotLister
+	health      HealthChecker
+	skills      SkillLister
+	users       UserFinder
+	questions   QuestionLister
+	srs         SRSDueLister
+	taskSlots   TaskSlotLister
+	taskOptions TaskOptionLister
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
 // 足すだけで済み、既存の New 呼び出し（テスト含む）を壊さない。
 type Deps struct {
-	Health    HealthChecker
-	Skills    SkillLister
-	Users     UserFinder
-	Questions QuestionLister
-	SRS       SRSDueLister
-	TaskSlots TaskSlotLister
+	Health      HealthChecker
+	Skills      SkillLister
+	Users       UserFinder
+	Questions   QuestionLister
+	SRS         SRSDueLister
+	TaskSlots   TaskSlotLister
+	TaskOptions TaskOptionLister
 }
 
 func New(deps Deps) *Handler {
 	return &Handler{
-		health:    deps.Health,
-		skills:    deps.Skills,
-		users:     deps.Users,
-		questions: deps.Questions,
-		srs:       deps.SRS,
-		taskSlots: deps.TaskSlots,
+		health:      deps.Health,
+		skills:      deps.Skills,
+		users:       deps.Users,
+		questions:   deps.Questions,
+		srs:         deps.SRS,
+		taskSlots:   deps.TaskSlots,
+		taskOptions: deps.TaskOptions,
 	}
 }

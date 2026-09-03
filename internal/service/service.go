@@ -32,9 +32,14 @@ type SkillRepository interface {
 	ListSkillNodes(ctx context.Context) ([]domain.SkillNode, error)
 }
 
+// UserLookupRepository は認証基盤上の識別子からユーザーを解決する。
+type UserLookupRepository interface {
+	FindUserByExternalID(ctx context.Context, externalID string) (domain.User, domain.Progress, error)
+}
+
 // UserRepository はユーザーと進捗の取得・作成。
 type UserRepository interface {
-	FindUserByExternalID(ctx context.Context, externalID string) (domain.User, domain.Progress, error)
+	UserLookupRepository
 	InsertUser(ctx context.Context, externalID, displayName string, avatarURL *string) (domain.User, domain.Progress, error)
 	UpdateUser(
 		ctx context.Context,
@@ -60,4 +65,10 @@ type SRSRepository interface {
 // TaskSlotRepository はユーザーのタスクスロット設定を取得する。
 type TaskSlotRepository interface {
 	ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error)
+}
+
+// TaskOptionRepository は認証ユーザーの解決とタスク候補の取得。
+type TaskOptionRepository interface {
+	UserLookupRepository
+	ListTaskOptions(ctx context.Context) ([]domain.TaskOption, error)
 }
