@@ -39,6 +39,10 @@ type QuestionLister interface {
 	GetForUser(ctx context.Context, externalID, questionID string) (domain.QuestionDetail, error)
 }
 
+type AttemptSubmitter interface {
+	Submit(ctx context.Context, externalID, questionID string, in service.SubmitAttemptInput) (domain.AttemptResult, error)
+}
+
 type SRSDueLister interface {
 	ListDue(ctx context.Context, externalID string, limit int) ([]domain.SRSDueItem, error)
 }
@@ -69,6 +73,7 @@ type Handler struct {
 	taskSlots   TaskSlotLister
 	taskOptions TaskOptionLister
 	calendar    CalendarGetter
+	attempts    AttemptSubmitter
 	home        HomeGetter
 }
 
@@ -83,6 +88,7 @@ type Deps struct {
 	TaskSlots   TaskSlotLister
 	TaskOptions TaskOptionLister
 	Calendar    CalendarGetter
+	Attempts    AttemptSubmitter
 	Home        HomeGetter
 }
 
@@ -96,6 +102,7 @@ func New(deps Deps) *Handler {
 		taskSlots:   deps.TaskSlots,
 		taskOptions: deps.TaskOptions,
 		calendar:    deps.Calendar,
+		attempts:    deps.Attempts,
 		home:        deps.Home,
 	}
 }

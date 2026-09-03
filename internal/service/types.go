@@ -34,3 +34,9 @@ type QuestionList struct {
 	Questions  []domain.QuestionSummary `json:"questions"`
 	NextCursor *string                  `json:"next_cursor"`
 }
+
+// SubmitAttemptInput は回答送信の入力。DurationMS は未指定なら nil。
+type SubmitAttemptInput struct {
+	SelectedKeys []string
+	DurationMS   *int
+}

@@ -57,6 +57,11 @@ type QuestionRepository interface {
 	FindPublishedByID(ctx context.Context, userID, questionID string) (domain.Question, bool, error)
 }
 
+// AttemptRepository は回答と、それに伴う全ての進捗更新を1トランザクションで記録する。
+type AttemptRepository interface {
+	RecordAttempt(ctx context.Context, attempt domain.Attempt, question domain.Question, xpGained int) (domain.AttemptResult, error)
+}
+
 // SRSRepository は復習期限の問題を取得する。
 type SRSRepository interface {
 	ListDue(ctx context.Context, userID string, limit int) ([]domain.SRSDueItem, error)

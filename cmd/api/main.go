@@ -61,6 +61,7 @@ func run() error {
 		Questions:   service.NewQuestion(repo, repo),
 		SRS:         service.NewSRS(repo, repo),
 		Calendar:    service.NewCalendar(repo, repo),
+		Attempts:    service.NewAttempt(repo, repo, repo),
 		Home:        service.NewHome(repo, repo),
 	})
 
