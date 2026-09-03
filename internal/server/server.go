@@ -60,5 +60,8 @@ func New(cfg config.Config, h *handler.Handler, auth echo.MiddlewareFunc) *echo.
 	v1.GET("/calendar", h.Calendar, auth)                     // 認証必須
 	v1.GET("/home", h.Home, auth)                             // 認証必須
 
+	// /v1/admin/* は認証に加えてレビュアー権限を要求する。
+	v1.Group("/admin", auth, middleware.RequireReviewer(cfg))
+
 	return e
 }
