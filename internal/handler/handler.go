@@ -83,6 +83,9 @@ type CalendarGetter interface {
 type HomeGetter interface {
 	Get(ctx context.Context, externalID string) (domain.Home, error)
 }
+type MeStatsGetter interface {
+	Stats(ctx context.Context, externalID string) ([]domain.TypeStat, error)
+}
 
 type Handler struct {
 	health       HealthChecker
@@ -100,6 +103,7 @@ type Handler struct {
 	calendar     CalendarGetter
 	attempts     AttemptSubmitter
 	home         HomeGetter
+	stats        MeStatsGetter
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
@@ -120,6 +124,7 @@ type Deps struct {
 	Calendar     CalendarGetter
 	Attempts     AttemptSubmitter
 	Home         HomeGetter
+	Stats        MeStatsGetter
 }
 
 func New(deps Deps) *Handler {
@@ -139,5 +144,6 @@ func New(deps Deps) *Handler {
 		calendar:     deps.Calendar,
 		attempts:     deps.Attempts,
 		home:         deps.Home,
+		stats:        deps.Stats,
 	}
 }
