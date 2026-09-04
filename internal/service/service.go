@@ -114,6 +114,11 @@ type CalendarRepository interface {
 	Streak(ctx context.Context, userID string) (int, *string, error)
 }
 
+// MeStatsRepository は種別×言語別の累計統計を取得する。
+type MeStatsRepository interface {
+	ListTypeStats(ctx context.Context, userID string) ([]domain.TypeStat, error)
+}
+
 type HomeRepository interface {
 	ListUserTasks(ctx context.Context, userID string) ([]domain.TaskConfig, error)
 	PickUnansweredPublished(ctx context.Context, userID string, typ domain.QuestionType, language string, difficulty int) (domain.Question, error)

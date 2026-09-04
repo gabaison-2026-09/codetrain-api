@@ -47,6 +47,7 @@ func New(cfg config.Config, h *handler.Handler, auth echo.MiddlewareFunc) *echo.
 	v1 := e.Group("/v1")
 	v1.GET("/skills", h.ListSkills)                           // 認証不要
 	v1.GET("/me", h.Me, auth)                                 // 認証必須
+	v1.GET("/me/stats", h.MeStats, auth)                      // 認証必須
 	v1.POST("/me", h.CreateMe, auth)                          // 認証必須（JIT プロビジョニング）
 	v1.GET("/task-slots/options", h.TaskOptions, auth)        // :slot_no より先に登録する
 	v1.PUT("/task-slots/:slot_no", h.PutTaskSlot, auth)       // 認証必須
