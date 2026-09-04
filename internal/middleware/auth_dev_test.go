@@ -66,7 +66,7 @@ func TestDevAuth(t *testing.T) {
 // タグなしのビルドでは空になること（auth_dev_disabled_test.go）と対にしている。
 func TestExtraCORSHeadersWithDevAuth(t *testing.T) {
 	got := ExtraCORSHeaders()
-	if len(got) != 1 || got[0] != devUserHeader {
-		t.Errorf("ExtraCORSHeaders() = %v, want [%s]", got, devUserHeader)
+	if len(got) != 2 || got[0] != devUserHeader || got[1] != devEmailHeader {
+		t.Errorf("ExtraCORSHeaders() = %v, want [%s %s]", got, devUserHeader, devEmailHeader)
 	}
 }

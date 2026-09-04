@@ -9,9 +9,10 @@ type UserWithProgress struct {
 }
 
 // CreateUserInput は POST /v1/me の作成内容。
-// DisplayName は必須。AvatarURL は任意（未指定なら nil）。
+// DisplayName は必須。AvatarURL・Email は任意（未指定なら nil）。
 type CreateUserInput struct {
 	DisplayName string
+	Email       *string
 	AvatarURL   *string
 }
 
@@ -63,6 +64,12 @@ type ReviewQueueParams struct {
 type ReviewQueueList struct {
 	Items      []domain.ReviewQueueItem `json:"items"`
 	NextCursor *string                  `json:"next_cursor"`
+}
+
+// AdminReviewInput は POST /v1/admin/questions/{id}/review の入力。
+type AdminReviewInput struct {
+	Decision domain.ReviewDecision
+	Notes    string
 }
 
 // SubmitAttemptInput は回答送信の入力。DurationMS は未指定なら nil。

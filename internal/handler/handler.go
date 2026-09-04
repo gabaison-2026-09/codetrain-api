@@ -25,7 +25,7 @@ type SkillLister interface {
 }
 
 type UserFinder interface {
-	Me(ctx context.Context, externalID string) (service.UserWithProgress, error)
+	Me(ctx context.Context, externalID string, email string) (service.UserWithProgress, error)
 	Create(ctx context.Context, externalID string, in service.CreateUserInput) (service.UserWithProgress, error)
 	Update(
 		ctx context.Context,
@@ -47,8 +47,16 @@ type AdminQuestionGetter interface {
 	Get(ctx context.Context, questionID string) (domain.AdminQuestion, error)
 }
 
+type AdminQuestionUpdater interface {
+	Update(ctx context.Context, questionID string, patch domain.AdminQuestionPatch) (domain.AdminQuestion, error)
+}
+
 type ReviewQueueLister interface {
 	List(ctx context.Context, params service.ReviewQueueParams) (service.ReviewQueueList, error)
+}
+
+type AdminReviewer interface {
+	Decide(ctx context.Context, reviewerSub, questionID string, in service.AdminReviewInput) (domain.ReviewResult, error)
 }
 
 type AttemptSubmitter interface {
@@ -75,55 +83,67 @@ type CalendarGetter interface {
 type HomeGetter interface {
 	Get(ctx context.Context, externalID string) (domain.Home, error)
 }
+type MeStatsGetter interface {
+	Stats(ctx context.Context, externalID string) ([]domain.TypeStat, error)
+}
 
 type Handler struct {
-	health      HealthChecker
-	skills      SkillLister
-	users       UserFinder
-	questions   QuestionLister
-	admin       AdminQuestionLister
-	adminGetter AdminQuestionGetter
-	reviewQueue ReviewQueueLister
-	srs         SRSDueLister
-	taskSlots   TaskSlotLister
-	taskOptions TaskOptionLister
-	calendar    CalendarGetter
-	attempts    AttemptSubmitter
-	home        HomeGetter
+	health       HealthChecker
+	skills       SkillLister
+	users        UserFinder
+	questions    QuestionLister
+	admin        AdminQuestionLister
+	adminGetter  AdminQuestionGetter
+	adminUpdater AdminQuestionUpdater
+	reviewQueue  ReviewQueueLister
+	reviewer     AdminReviewer
+	srs          SRSDueLister
+	taskSlots    TaskSlotLister
+	taskOptions  TaskOptionLister
+	calendar     CalendarGetter
+	attempts     AttemptSubmitter
+	home         HomeGetter
+	stats        MeStatsGetter
 }
 
 // Deps は Handler が必要とする service 群。service を増やす際はここにフィールドを
 // 足すだけで済み、既存の New 呼び出し（テスト含む）を壊さない。
 type Deps struct {
-	Health      HealthChecker
-	Skills      SkillLister
-	Users       UserFinder
-	Questions   QuestionLister
-	Admin       AdminQuestionLister
-	AdminGetter AdminQuestionGetter
-	ReviewQueue ReviewQueueLister
-	SRS         SRSDueLister
-	TaskSlots   TaskSlotLister
-	TaskOptions TaskOptionLister
-	Calendar    CalendarGetter
-	Attempts    AttemptSubmitter
-	Home        HomeGetter
+	Health       HealthChecker
+	Skills       SkillLister
+	Users        UserFinder
+	Questions    QuestionLister
+	Admin        AdminQuestionLister
+	AdminGetter  AdminQuestionGetter
+	AdminUpdater AdminQuestionUpdater
+	ReviewQueue  ReviewQueueLister
+	Reviewer     AdminReviewer
+	SRS          SRSDueLister
+	TaskSlots    TaskSlotLister
+	TaskOptions  TaskOptionLister
+	Calendar     CalendarGetter
+	Attempts     AttemptSubmitter
+	Home         HomeGetter
+	Stats        MeStatsGetter
 }
 
 func New(deps Deps) *Handler {
 	return &Handler{
-		health:      deps.Health,
-		skills:      deps.Skills,
-		users:       deps.Users,
-		questions:   deps.Questions,
-		admin:       deps.Admin,
-		adminGetter: deps.AdminGetter,
-		reviewQueue: deps.ReviewQueue,
-		srs:         deps.SRS,
-		taskSlots:   deps.TaskSlots,
-		taskOptions: deps.TaskOptions,
-		calendar:    deps.Calendar,
-		attempts:    deps.Attempts,
-		home:        deps.Home,
+		health:       deps.Health,
+		skills:       deps.Skills,
+		users:        deps.Users,
+		questions:    deps.Questions,
+		admin:        deps.Admin,
+		adminGetter:  deps.AdminGetter,
+		adminUpdater: deps.AdminUpdater,
+		reviewQueue:  deps.ReviewQueue,
+		reviewer:     deps.Reviewer,
+		srs:          deps.SRS,
+		taskSlots:    deps.TaskSlots,
+		taskOptions:  deps.TaskOptions,
+		calendar:     deps.Calendar,
+		attempts:     deps.Attempts,
+		home:         deps.Home,
+		stats:        deps.Stats,
 	}
 }

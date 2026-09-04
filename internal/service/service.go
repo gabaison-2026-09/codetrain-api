@@ -41,13 +41,14 @@ type UserLookupRepository interface {
 // UserRepository はユーザーと進捗の取得・作成。
 type UserRepository interface {
 	UserLookupRepository
-	InsertUser(ctx context.Context, externalID, displayName string, avatarURL *string) (domain.User, domain.Progress, error)
+	InsertUser(ctx context.Context, externalID, displayName string, email *string, avatarURL *string) (domain.User, domain.Progress, error)
 	UpdateUser(
 		ctx context.Context,
 		externalID string,
 		displayName *string,
 		avatarURL *string,
 	) (domain.User, error)
+	BackfillEmail(ctx context.Context, externalID, email string) error
 }
 
 // QuestionRepository は published 問題の検索・取得。行を返すだけで、ページングは service が行う。
@@ -69,9 +70,19 @@ type AdminQuestionDetailRepository interface {
 	ListReviewHistory(ctx context.Context, questionID string) ([]domain.ReviewEntry, error)
 }
 
+// AdminQuestionUpdateRepository は管理者向け問題の部分更新を行う。
+type AdminQuestionUpdateRepository interface {
+	UpdateQuestion(ctx context.Context, questionID string, patch domain.AdminQuestionPatch) (domain.AdminQuestion, error)
+}
+
 // ReviewQueueRepository は未レビュー問題のキューを取得する。
 type ReviewQueueRepository interface {
 	ListReviewQueue(ctx context.Context, cursorQueuedAt *time.Time, cursorID string, limit int) ([]domain.ReviewQueueItem, error)
+}
+
+// AdminReviewRepository はレビュー判定の記録と問題ステータス更新を行う。
+type AdminReviewRepository interface {
+	DecideReview(ctx context.Context, reviewerID, questionID string, decision domain.ReviewDecision, notes string) (domain.ReviewResult, error)
 }
 
 // AttemptRepository は回答と、それに伴う全ての進捗更新を1トランザクションで記録する。
@@ -101,6 +112,11 @@ type TaskOptionRepository interface {
 type CalendarRepository interface {
 	DailyConsumption(ctx context.Context, userID string, from, to string) ([]domain.CalendarDay, error)
 	Streak(ctx context.Context, userID string) (int, *string, error)
+}
+
+// MeStatsRepository は種別×言語別の累計統計を取得する。
+type MeStatsRepository interface {
+	ListTypeStats(ctx context.Context, userID string) ([]domain.TypeStat, error)
 }
 
 type HomeRepository interface {

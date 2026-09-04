@@ -53,7 +53,7 @@ ON CONFLICT (user_id, question_type, language) DO UPDATE SET
 	_, err = tx.Exec(ctx, `
 INSERT INTO srs_state
   (user_id, question_id, interval_days, repetitions, due_on, last_reviewed_at)
-VALUES ($1, $2, 1, CASE WHEN $3 THEN 1 ELSE 0 END, CURRENT_DATE + 1, now())
+VALUES ($1, $2, 1, CASE WHEN $3 THEN 1 ELSE 0 END, `+jstToday+` + 1, now())
 ON CONFLICT (user_id, question_id) DO UPDATE SET
   repetitions = CASE WHEN $3 THEN srs_state.repetitions + 1 ELSE 0 END,
   interval_days = CASE
@@ -62,7 +62,7 @@ ON CONFLICT (user_id, question_id) DO UPDATE SET
     WHEN srs_state.interval_days = 1 THEN 3
     ELSE greatest(1, round(srs_state.interval_days * srs_state.easiness)::int)
   END,
-  due_on = CURRENT_DATE + CASE
+  due_on = `+jstToday+` + CASE
     WHEN NOT $3 THEN 1
     WHEN srs_state.interval_days < 1 THEN 1
     WHEN srs_state.interval_days = 1 THEN 3
@@ -79,7 +79,7 @@ ON CONFLICT (user_id, question_id) DO UPDATE SET
 UPDATE daily_task SET completed_at = now(), attempt_id = $3
 WHERE id = (
   SELECT id FROM daily_task
-  WHERE user_id = $1 AND activity_date = CURRENT_DATE
+  WHERE user_id = $1 AND activity_date = `+jstToday+`
     AND question_id = $2 AND completed_at IS NULL
   ORDER BY slot_no LIMIT 1 FOR UPDATE
 )
@@ -101,7 +101,7 @@ WITH completed_days AS (
   SELECT day, day - (row_number() OVER (ORDER BY day))::int AS grp FROM completed_days
 ), latest AS (SELECT max(day) AS day FROM completed_days), calculated AS (
   SELECT COALESCE((SELECT count(*) FROM ranked r, latest l
-    WHERE l.day >= CURRENT_DATE - 1 AND r.grp =
+    WHERE l.day >= `+jstToday+` - 1 AND r.grp =
       (SELECT grp FROM ranked WHERE day = l.day)), 0)::int AS streak_days,
     (SELECT day FROM latest) AS last_studied_on
 )

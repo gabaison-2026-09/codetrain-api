@@ -173,6 +173,9 @@ func newCognitoAuth(cfg config.Config) (echo.MiddlewareFunc, error) {
 				return ErrUnauthorized
 			}
 			setSubject(c, sub)
+			if email, ok := claims["email"].(string); ok && email != "" {
+				setEmail(c, email)
+			}
 			return next(c)
 		}
 	}, nil
